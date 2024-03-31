@@ -78,8 +78,10 @@
 
 
 <script>
+import { ElMessage } from 'element-plus'
+import { ElNotification } from 'element-plus'
 
-
+import {App,OfficialGameData,importChefsAndRecipesFromFoodGame} from './core/bundle.js'
 export default {
   officialGameData: {},
   myGameData: null,
@@ -112,17 +114,39 @@ export default {
     this.init();
   },
   methods: {
+    async calculator() {
+      if (this.officialGameData == null || this.myGameData == null) {
+        ElNotification({
+          title: '无法计算',
+          message: '没有厨师或厨具配置，无法计算',
+          type: 'error',
+        })
+        return;
+      }
+
+      let rewardAndCount = null;
+
+      // 挑选本周规则，还是历史规则
+      if (this.currentRule == -1) {
+        rewardAndCount = this.curWeekRule;
+      } else {
+        rewardAndCount = await (await fetch(`https://bcjh.xyz/api/get_rule?time=${this.currentRule}`)).json();
+      }
+      let topResult = await App.main(this.officialGameData, this.myGameData, rewardAndCount);
+      console.log(topResult[0].chefs)
+      this.topChefs = topResult[0].chefs
+      this.topScore = topResult[0].score
+    },
     async init() {
       await this.initRuleSelected();
       await this.loadData();
     },
     async loadData() {
-
       let data = await this.getOfficeGameData();
       if (data == null) {
         return
       }
-      let officialGameData = new com.example.entity.OfficialGameData();
+      let officialGameData = new OfficialGameData();
       officialGameData.chefs = data.chefs;
       officialGameData.equips = data.equips;
       officialGameData.materials = data.materials;
@@ -219,38 +243,26 @@ export default {
       }
       return false
     },
-    async calculator() {
-      if (this.officialGameData == null || this.myGameData == null) {
-        const h = this.$createElement;
-        this.$notify({
-          title: '无法计算',
-          message: h('i', {style: 'color: teal'}, '没有厨师或厨具配置，无法计算')
-        });
-        return;
-      }
-
-      let rewardAndCount = null;
-
-      // 挑选本周规则，还是历史规则
-      if (this.currentRule == -1) {
-        rewardAndCount = this.curWeekRule;
-      } else {
-        rewardAndCount = await (await fetch(`https://bcjh.xyz/api/get_rule?time=${this.currentRule}`)).json();
-      }
-      let topResult = await com.example.App.main(this.officialGameData, this.myGameData, rewardAndCount);
-      this.topChefs = topResult[0].chefs
-      this.topScore = topResult[0].score
-    },
-
     async loadMyData(code) {
       let data = await (await fetch(`https://yx518.com/api/archive.do?token=${code}&_=${new Date().getTime()}`)).json();
       return data.msg;
     },
     async saveRecipesAndChefsData() {
       let data = await this.loadMyData(this.dataCode);
-      if (data != null && data != '') {
+      if (data != null && data != '' && data != '数据过期') {
+        ElNotification({
+          title: '加载成功',
+          message: '加载成功',
+          type: 'success',
+        })
         localStorage.setItem('myGameData', JSON.stringify(data))
         this.updateData(data)
+      }else {
+        ElNotification({
+          title: '加载失败',
+          message: data,
+          type: 'error',
+        })
       }
     },
     async getOfficeGameData() {
@@ -270,6 +282,11 @@ export default {
       let data = await (await fetch(`https://foodgame.top/data/data.min.json?v=${new Date().getTime()}`)).json();
       let dateStr = JSON.stringify(data);
       localStorage.setItem('gameData', dateStr)
+      ElNotification({
+        title: '加载成功',
+        message: '加载成功',
+        type: 'success',
+      })
       return dateStr;
     },
     cardClick(event) {
