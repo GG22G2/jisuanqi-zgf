@@ -1,53 +1,23 @@
 /* Generated from Java with JSweet 3.0.0 - http://www.jsweet.org */
 
-class App {
-    static main(officialGameData, myGameData, rewardAndCount) {
-        return new Promise(resolve => {
-            let result = getMaterialAndRewardFromJson(rewardAndCount)
-            let TopResult = App.defaultTask(officialGameData, myGameData, result);
-            // let TopResult = App.testTask(officialGameData, myGameData);
-            resolve(TopResult)
-        });
-        //App.testTask(officialGameData, myGameData);
+
+class CalConfig {
+    /**
+     * 计算配置，暂时只有加法额外追加的值
+     * */
+    constructor(addBaseValue) {
+        this.addBaseValue = addBaseValue;
     }
 
-    static defaultTask(officialGameData, myGameData, rewardAndCount) {
-        const reward = rewardAndCount.reward;
-        const materialCount = rewardAndCount.materialCount;
-        let sexReward = new Array(2).fill(0);
-        //todo 性别加成还没有考虑
-        //sexReward = [0, 0.5]
-        const inference = new GodInference(reward, sexReward, materialCount, officialGameData, myGameData);
-        return inference.refer();
-    }
-
-    static testTask(officialGameData, myGameData) {
-        const reward = new Array(10000).fill(1);
-        const materialCount = new Array(47).fill(50);
-        let sexReward = new Array(2).fill(0);
-        sexReward = [0, 0.5]
-        const inference = new GodInference(reward, sexReward, materialCount, officialGameData, myGameData);
-        inference.refer();
-    }
 }
 
 class CacheKitchenGodCal {
     constructor() {
         this.qualityAdd = [-1, 0, 0.1, 0.3, 0.5, 1.0];
-        this.quality = (function (dims) {
-            let allocate = function (dims) {
-                if (dims.length === 0) {
-                    return 0;
-                } else {
-                    let array = [];
-                    for (let i = 0; i < dims[0]; i++) {
-                        array.push(allocate(dims.slice(1)));
-                    }
-                    return array;
-                }
-            };
-            return allocate(dims);
-        })([2000, 400]);
+        this.quality = new Array(2000);
+        for (let i = 0; i < 2000; i++) {
+            this.quality[i] = new Array(400).fill(0);
+        }
         this.initDivisionResult();
     }
 
@@ -77,10 +47,7 @@ class CacheKitchenGodCal {
      * @return {double}
      */
     qualityAddNoEquip(chef, effect, recipe) {
-        let ratio = 5;
-        let t;
-        let hasFailOnce = false;
-        let s;
+        let ratio = 5, t, s;
         if (recipe.bake !== 0) {
             s = (chef.bake + effect.bake) * (1 + effect.bakePercent);
             s = Math.max(0, s);
@@ -169,20 +136,10 @@ class ChefAndRecipeThread {
     static disordePermuation_$LI$() {
         ChefAndRecipeThread.__static_initialize();
         if (ChefAndRecipeThread.disordePermuation == null) {
-            ChefAndRecipeThread.disordePermuation = (function (dims) {
-                let allocate = function (dims) {
-                    if (dims.length === 0) {
-                        return 0;
-                    } else {
-                        let array = [];
-                        for (let i = 0; i < dims[0]; i++) {
-                            array.push(allocate(dims.slice(1)));
-                        }
-                        return array;
-                    }
-                };
-                return allocate(dims);
-            })([1680, 9]);
+            ChefAndRecipeThread.disordePermuation = new Array(1680);
+            for (let i = 0; i < 1680; i++) {
+                ChefAndRecipeThread.disordePermuation[i] = new Array(9).fill(0);
+            }
         }
         return ChefAndRecipeThread.disordePermuation;
     }
@@ -205,14 +162,12 @@ class ChefAndRecipeThread {
      * @return {BigInt} 返回得分最高的tomNum个结果，结果是有序的，已经按照得分从高到底排序了
      */
     call() {
-
         let starttime = Date.now(), endtime = 0;
 
         let playChefs2 = new Array(this.playChefs.length);
         for (let i = 0; i < playChefs2.length; i++) {
             playChefs2[i] = this.playChefs[i][2];
         }
-
 
         let noCanUseScoreIndex = new Array(this.scoreAddCacheNoEquip.length).fill(false);
         //获取所有组合中最高的一组分数
@@ -276,26 +231,22 @@ class ChefAndRecipeThread {
                         if (cal > score3Limit) {
                             cal += score2;
                             if (cal > maxScore) {
-
                                 maxScore = cal;
                                 // i k ,i9   菜谱 i(0-2304)12位，  菜谱排列 k(0-1680)11位，  厨师组合 i2(0-795)12位
                                 //将得分， 菜谱，菜谱排列，厨师组合索引组合成long保存， 得分(cal)在高位，这样新的cal可以用来排序
                                 // 1符号位，20位得分，18位菜谱索引，11位菜谱排列，14位厨师索引
                                 let bigCal = BigInt(cal);
                                 maxKey = ((((bigCal << 18n | BigInt(i)) << 11n) | BigInt(k)) << 14n) | BigInt(i9);
-
                             }
                         }
                     }
                 }
-
             }
         }
 
         endtime = /* currentTimeMillis */ Date.now();
         console.info((this.limit - this.start) + "全菜谱 全厨师 无厨具排列结果用时:" + (endtime - starttime) + "ms");
         return maxKey;
-
     }
 
 
@@ -333,58 +284,35 @@ ChefAndRecipeThread.index = 0;
 
 class GlobalAddtion {
     constructor(chefs, skills1) {
-        if (((chefs != null && chefs instanceof Array) || chefs === null) && ((skills1 != null && (skills1 instanceof Array)) || skills1 === null)) {
-            this.bake = 0;
-            this.boil = 0;
-            this.stirfry = 0;
-            this.knife = 0;
-            this.fry = 0;
-            this.steam = 0;
-            this.manfill = 0;
-            this.womanfill = 0;
-            this.price = 0;
-            this.useall = [0, 0, 0, 0, 0, 0];
-            this.maxequiplimit = [0, 0, 0, 0, 0, 0];
-            const chefs1 = new Array(chefs.length)
-            for (let i = 0; i < chefs1.length; i++) {
-                chefs1[i] = chefs[i];
-            }
-            this.init$com_example_entity_Chef_A$java_util_List(chefs1, skills1);
-        } else if (((chefs != null && chefs instanceof OfficialGameData) || chefs === null) && skills1 === undefined) {
-            let __args = arguments;
-            let officialGameData = __args[0];
-            this.bake = 0;
-            this.boil = 0;
-            this.stirfry = 0;
-            this.knife = 0;
-            this.fry = 0;
-            this.steam = 0;
-            this.manfill = 0;
-            this.womanfill = 0;
-            this.price = 0;
-            this.useall = [0, 0, 0, 0, 0, 0];
-            this.maxequiplimit = [0, 0, 0, 0, 0, 0];
-            this.init$com_example_entity_OfficialGameData(officialGameData);
-        } else
-            throw new Error('invalid overload');
+        this.bake = 0;
+        this.boil = 0;
+        this.stirfry = 0;
+        this.knife = 0;
+        this.fry = 0;
+        this.steam = 0;
+        this.manfill = 0;
+        this.womanfill = 0;
+        this.price = 0;
+        this.useall = [0, 0, 0, 0, 0, 0];
+        this.maxequiplimit = [0, 0, 0, 0, 0, 0];
+        this.init(chefs, skills1)
     }
 
-    init$com_example_entity_Chef_A$java_util_List(chefs, skills1) {
-        const skills = (new Map());
-        for (let index122 = 0; index122 < skills1.length; index122++) {
-            let skill = skills1[index122];
+    init(chefs, skills1) {
+        const skills = new Map();
+        for (let i = 0; i < skills1.length; i++) {
+            let skill = skills1[i];
             skills.set(skill.skillId, skill);
         }
-        for (let index123 = 0; index123 < chefs.length; index123++) {
-            let chef = chefs[index123];
-
+        for (let i = 0; i < chefs.length; i++) {
+            let chef = chefs[i];
             if (this.hasXiuLian(chef)) {
                 const skill = skills.get(chef.ultimateSkill);
                 if (skill == null) {
                     continue;
                 }
-                for (let index124 = 0; index124 < skill.effect.length; index124++) {
-                    let effect = skill.effect[index124];
+                for (let j = 0; j < skill.effect.length; j++) {
+                    let effect = skill.effect[j];
                     this.parseEffect(effect);
                 }
             }
@@ -392,8 +320,8 @@ class GlobalAddtion {
             if (skill == null) {
                 continue;
             }
-            for (let index125 = 0; index125 < skill.effect.length; index125++) {
-                let effect = skill.effect[index125];
+            for (let j = 0; j < skill.effect.length; j++) {
+                let effect = skill.effect[j];
                 this.parseEffect(effect);
             }
 
@@ -401,17 +329,8 @@ class GlobalAddtion {
         for (let i = 0; i < this.useall.length; i++) {
             this.useall[i] = this.useall[i] / 100;
         }
-        this.manfill = (n => n < 0 ? Math.ceil(n) : Math.floor(n))(this.manfill / 6);
-        this.womanfill = (n => n < 0 ? Math.ceil(n) : Math.floor(n))(this.womanfill / 6);
-    }
-
-    init(chefs, skills1) {
-        if (((chefs != null && chefs instanceof Array && (chefs.length == 0 || chefs[0] == null || (chefs[0] != null && chefs[0] instanceof Chef))) || chefs === null) && ((skills1 != null && (skills1 instanceof Array)) || skills1 === null)) {
-            return this.init$com_example_entity_Chef_A$java_util_List(chefs, skills1);
-        } else if (((chefs != null && chefs instanceof OfficialGameData) || chefs === null) && skills1 === undefined) {
-            return this.init$com_example_entity_OfficialGameData(chefs);
-        } else
-            throw new Error('invalid overload');
+        this.manfill = Math.floor(this.manfill / 6);
+        this.womanfill = Math.floor(this.womanfill / 6)
     }
 
     parseEffect(effect) {
@@ -456,12 +375,6 @@ class GlobalAddtion {
         }
     }
 
-    init$com_example_entity_OfficialGameData(officialGameData) {
-        const skills1 = officialGameData.skills;
-        const chefs = officialGameData.chefs;
-        this.init$com_example_entity_Chef_A$java_util_List(/* toArray */ chefs.slice(0), skills1);
-    }
-
     hasXiuLian(chef) {
         return chef.ultimateSkill != null;
 
@@ -479,22 +392,13 @@ class PlayRecipe {
     }
 
     /**
-     *
      * @return {PlayRecipe}
      */
     clone() {
-        let old = null;
-        try {
-            old = ((o) => {
-                let clone = Object.create(o);
-                for (let p in o) {
-                    if (o.hasOwnProperty(p))
-                        clone[p] = o[p];
-                }
-                return clone;
-            })(this);
-        } catch (e) {
-            console.error(e.message, e);
+        let old = Object.create(this);
+        for (let p in this) {
+            if (this.hasOwnProperty(p))
+                old[p] = this[p];
         }
         return old;
     }
@@ -514,7 +418,7 @@ class PlayRecipe {
 }
 
 class GodInference {
-    constructor(rewardlsit, sexReward, materials, officialGameData, myGameData) {
+    constructor(reward, sexReward, materials, calConfig, officialGameData, myGameData) {
         this.segmentnums = 300;
         this.chefMinRaritySum = 14;
         this.deepLimit = [0, 6, 3, 3, 2, 2, 2, 2, 2, 2];
@@ -522,16 +426,9 @@ class GodInference {
         this.ownRecipes = null;
         this.ownEquips = null;
         this.tempOwnRecipes = null;
-        this.playRecipes = new Array();
-        if (this.playChefs === undefined) {
-            this.playChefs = null;
-        }
-        if (this.playEquips === undefined) {
-            this.playEquips = null;
-        }
-        if (this.tempCalCache === undefined) {
-            this.tempCalCache = null;
-        }
+        this.playRecipes = [];
+        this.playChefs = null;
+        this.tempCalCache = null;
         this.counts = new Array(7000).fill(0);
         this.prices = new Array(7000).fill(0);
         this.materialTag = ["留空",
@@ -540,7 +437,7 @@ class GodInference {
             "面", "菜", "菜", "鱼", "菜", "肉", "肉", "肉", "面", "菜",
             "菜", "鱼", "菜", "面", "面", "菜", "鱼", "肉", "肉", "肉",
             "鱼", "鱼", "肉", "肉", "菜", "菜"];
-        this.reward = rewardlsit;
+        this.reward = reward;
         this.materials = materials;
         this.sexReward = sexReward;
         this.officialGameData = officialGameData;
@@ -607,6 +504,8 @@ class GodInference {
 
         const maps = new Map();
 
+        let quchong = new Set();
+
         for (let i = 0; i < this.playRecipes.length; i++) {
             let recipesTemp = this.playRecipes[i];
             for (let j = 0; j < 9; j++) {
@@ -616,8 +515,12 @@ class GodInference {
                 const mapId = count << 14 | recipeId;
                 let calRecipe = maps.get(mapId);
                 if (calRecipe == null) {
-                    calRecipe = new CalRecipe(playRecipe.getRecipe(), count);
-                    maps.set(mapId, calRecipe);
+                    let key = playRecipe.getRecipe().name + count;
+                    if (!quchong.has(key)) {
+                        calRecipe = new CalRecipe(playRecipe.getRecipe(), count);
+                        maps.set(mapId, calRecipe);
+                        quchong.add(key)
+                    }
                 }
             }
         }
@@ -660,7 +563,7 @@ class GodInference {
         let end;
         start = Date.now();
         const total = this.playRecipes.length;
-        const t1 = total * 1.0 / this.segmentnums;
+        const t1 = total / this.segmentnums;
         let groupnum = (((t1 | 0) < t1 ? t1 + 1 : t1) | 0);
         const playRecipes2 = new Array(this.playRecipes.length);
 
@@ -683,8 +586,7 @@ class GodInference {
         }
 
         let topPlayChers = [];
-        let scores = new Array(500000)
-        let scoreIndex = 0;
+
         groupnum = 1;
         let maxScoreKey = BigInt(0);
         for (let i = 0; i < groupnum; i++) {
@@ -798,20 +700,18 @@ class GodInference {
 
     buildPermutation() {
         this.playChefs = null;
-        this.playEquips = null;
         this.playChefs = this.chefsPermutation();
         console.info("厨师组合数" + this.playChefs.length);
-        this.playEquips = [];
     }
 
     chefsPermutation() {
-        const index2 = ([]);
+        const index2 = [];
         const length = this.ownChefs.length;
         if (length < 3) {
             return null;
         }
-        let result;
-        const temp = ([]);
+
+        const result = [];
         for (let i = 0; i < length; i++) {
             for (let j = i + 1; j < length; j++) {
                 for (let k = j + 1; k < length; k++) {
@@ -820,110 +720,20 @@ class GodInference {
                         s[0] = this.ownChefs[i].index;
                         s[1] = this.ownChefs[j].index;
                         s[2] = this.ownChefs[k].index;
-                        temp.push(s);
+                        result.push(s);
                     }
                 }
-                if (index2.length === 0 || temp.length !== index2[ /* size */index2.length - 1]) {
-                    index2.push(temp.length);
+                if (index2.length === 0 || result.length !== index2[ /* size */index2.length - 1]) {
+                    index2.push(result.length);
                 }
             }
         }
-        result = ((a1, a2) => {
-            if (a1.length >= a2.length) {
-                a1.length = 0;
-                a1.push.apply(a1, a2);
-                return a1;
-            } else {
-                return a2.slice(0);
-            }
-        })((function (dims) {
-            let allocate = function (dims) {
-                if (dims.length === 0) {
-                    return 0;
-                } else {
-                    let array = [];
-                    for (let i = 0; i < dims[0]; i++) {
-                        array.push(allocate(dims.slice(1)));
-                    }
-                    return array;
-                }
-            };
-            return allocate(dims);
-        })([0, 0]), temp);
 
         GodInference.recipe2Change = new Array(index2.length + 1).fill(0);
         for (let i = 0; i < index2.length; i++) {
-            {
-                GodInference.recipe2Change[i + 1] = /* get */ index2[i];
-            }
+            GodInference.recipe2Change[i + 1] = index2[i];
         }
         return result;
-    }
-
-    equipspermute() {
-        const index2 = ([]);
-        const length = this.ownEquips.length;
-        if (length < 3) {
-            return [];
-        }
-        const totalLength = (MathExtend.A(length, 3) | 0);
-        const roots = ([]);
-
-        const result = new Array(totalLength);
-        for (let i = 0; i < totalLength; i++) {
-            result[i] = new Array(3);
-        }
-
-        let position = 0;
-        for (let i = 0; i < length; ++i) {
-
-            const root = new EquipTree();
-            root.index = this.ownEquips[i].index;
-            if (i > 0 && this.ownEquips[i].index === this.ownEquips[i - 1].index) {
-                continue;
-            }
-            const roots2 = [];
-            for (let i2 = 0; i2 < length; i2++) {
-                if (i2 === i) {
-                    continue;
-                }
-                const root2 = new EquipTree();
-                root2.index = this.ownEquips[i2].index;
-                roots2.push(root2);
-                const root3 = [];
-                for (let i3 = 0; i3 < length; i3++) {
-                    if (i3 === i || i3 === i2) {
-                        continue;
-                    }
-                    if (i3 > 0 && this.ownEquips[i3].index !== this.ownEquips[i3 - 1].index) {
-                        result[position][0] = this.ownEquips[i].index;
-                        result[position][1] = this.ownEquips[i2].index;
-                        result[position++][2] = this.ownEquips[i3].index;
-                        root3.push(this.ownEquips[i3].index)
-                    }
-                }
-                root2.leaves = root3;
-                if (index2.length === 0 || position !== index2[index2.length - 1]) {
-                    index2.push(position)
-                }
-            }
-            root.children = roots2.slice(0);
-            if (root.children != null) {
-                roots.push(root);
-            }
-
-        }
-        const result2 = roots.slice(0);
-        GodInference.equip2Change = (s => {
-            let a = [];
-            while (s-- > 0)
-                a.push(0);
-            return a;
-        })(index2.length);
-        for (let i7 = 0; i7 < GodInference.equip2Change.length; i7++) {
-            GodInference.equip2Change[i7] = index2[i7];
-        }
-        return result2;
     }
 
     recipePermutation(index, play, ingredientLimit) {
@@ -935,24 +745,24 @@ class GodInference {
         const finalMaterialCount = ingredientLimit.getFinalMaterialCount();
         const integerIntegerMap = this.calQuantity(finalMaterialCount);
         this.sortOfPrice(integerIntegerMap, this.tempOwnRecipes);
-        const removes = ([]);
+        const removes = [];
         for (let i = 0; i < limit; i++) {
             const selectRecipe = this.tempOwnRecipes.shift();
             removes.push(selectRecipe);
             const quantity = integerIntegerMap[selectRecipe.recipeId];
             const newplay = [];
-            /* addAll */
+
             ((l1, l2) => l1.push.apply(l1, l2))(newplay, play);
             ingredientLimit.cookingQuantit(selectRecipe, quantity);
             const clone = ingredientLimit.getFinalMaterialCount();
             const p = new PlayRecipe(selectRecipe, quantity);
-            /* add */
+
             newplay.push(p);
             this.recipePermutation(index + 1, newplay, ingredientLimit);
             ingredientLimit.setMaterialCount(clone);
         }
-        for (let it = 0; it < /* size */ removes.length; it++) {
-            this.tempOwnRecipes.push(/* get */ removes[it]);
+        for (let it = 0; it < removes.length; it++) {
+            this.tempOwnRecipes.push(removes[it]);
         }
     }
 
@@ -984,32 +794,30 @@ class GodInference {
     }
 
     buildRecipeTags() {
-        for (let index133 = 0; index133 < this.tempOwnRecipes.length; index133++) {
-            let ownRecipe = this.tempOwnRecipes[index133];
-            {
-                const materials = ownRecipe.materials;
-                const tags = [0, 0, 0, 0];
-                for (let index134 = 0; index134 < materials.length; index134++) {
-                    let material = materials[index134];
-                    switch (this.materialTag[material.material]) {
-                        case "面":
-                            tags[0] = 1;
-                            break;
-                        case "肉":
-                            tags[1] = 1;
-                            break;
-                        case "菜":
-                            tags[2] = 1;
-                            break;
-                        case "鱼":
-                            tags[3] = 1;
-                            break;
-                        default:
-                            break;
-                    }
+        for (let i = 0; i < this.tempOwnRecipes.length; i++) {
+            let ownRecipe = this.tempOwnRecipes[i];
+            const materials = ownRecipe.materials;
+            const tags = [0, 0, 0, 0];
+            for (let j = 0; j < materials.length; j++) {
+                let material = materials[j];
+                switch (this.materialTag[material.material]) {
+                    case "面":
+                        tags[0] = 1;
+                        break;
+                    case "肉":
+                        tags[1] = 1;
+                        break;
+                    case "菜":
+                        tags[2] = 1;
+                        break;
+                    case "鱼":
+                        tags[3] = 1;
+                        break;
+                    default:
+                        break;
                 }
-                ownRecipe.tags = tags;
             }
+            ownRecipe.tags = tags;
         }
     }
 
@@ -1044,24 +852,19 @@ GodInference.equip2Change = null;
 
 
 class IngredientLimit {
-    constructor(m) {
-        if (((m != null && m instanceof Array && (m.length == 0 || m[0] == null || (typeof m[0] === 'number'))) || m === null)) {
-            let __args = arguments;
-            this.materialCount = new Array(47).fill(0)
-            this.extraLimit = [0, 0, 0, 0, 0, 0];
-            if (m.length >= 47) {
-                this.materialCount = m;
-            } else {
-                this.materialCount.fill(50);
-            }
-        } else if (((typeof m === 'number') || m === null)) {
-            let ingredientNum = arguments[0];
+    constructor(ingredientNum) {
+        if (typeof ingredientNum === 'number') {
             this.materialCount = new Array(47).fill(0)
             this.extraLimit = [0, 0, 0, 0, 0, 0];
             this.materialCount.fill(ingredientNum);
-        } else if (m === undefined) {
+        } else {
             this.materialCount = new Array(47).fill(0)
             this.extraLimit = [0, 0, 0, 0, 0, 0];
+            if (ingredientNum.length >= 47) {
+                this.materialCount = ingredientNum;
+            } else {
+                this.materialCount.fill(50);
+            }
         }
     }
 
@@ -1709,9 +1512,7 @@ class builder {
         let effect = skill.effect;
         for (let index140 = 0; index140 < effect.length; index140++) {
             let effect1 = effect[index140];
-            {
-                skillEffect.effect(effect1);
-            }
+            skillEffect.effect(effect1);
         }
         const ultimateId = chef.ultimateSkill;
         if (ultimateId != null) {
@@ -1720,52 +1521,11 @@ class builder {
                 effect = skill.effect;
                 for (let index141 = 0; index141 < effect.length; index141++) {
                     let effect1 = effect[index141];
-                    {
-                        skillEffect.effect(effect1);
-                    }
+                    skillEffect.effect(effect1);
                 }
             }
         }
         chef.skillEffect = skillEffect;
-        return skillEffect;
-    }
-
-    buildEffect(chef) {
-        if (((chef != null && chef instanceof Chef) || chef === null)) {
-            return this.buildEffect$com_example_entity_Chef(chef);
-        } else if (((chef != null && chef instanceof Equip) || chef === null)) {
-            return this.buildEffect$com_example_entity_Equip(chef);
-        } else
-            throw new Error('invalid overload');
-    }
-
-    buildEffect$com_example_entity_Equip(equip) {
-        const skillEffect = new SkillEffect();
-        const skills = equip.skill;
-        for (let index142 = 0; index142 < skills.length; index142++) {
-            let skill = skills[index142];
-            {
-                const skill1 = this.officialGameData.getSkill(skill);
-                const effect = skill1.effect;
-                for (let index143 = 0; index143 < effect.length; index143++) {
-                    let effect1 = effect[index143];
-                    {
-                        skillEffect.effect(effect1);
-                    }
-                }
-            }
-        }
-        equip.skillEffect = skillEffect;
-        return skillEffect;
-    }
-
-    MergerSkillEffect(chef, equip) {
-        this.tempEffect.reset();
-        const skillEffect = this.tempEffect;
-        const skillEffect1 = chef.skillEffect;
-        const skillEffect2 = equip.skillEffect;
-        skillEffect.addEffect(skillEffect1);
-        skillEffect.addEffect(skillEffect2);
         return skillEffect;
     }
 }
@@ -1773,87 +1533,35 @@ class builder {
 TempCalCache.builder = builder;
 
 class TopResult {
-    constructor(playChefs, recipeindex, score) {
+    constructor(playChefs, recipeIndex, score) {
         this.chefs = null;
-        this.equipid = null;
         this.recepeids = null;
         this.id = 0;
         this.score = 0;
-        this.update(playChefs, recipeindex, score);
+        this.update(playChefs, recipeIndex, score);
     }
 
-    update(playChefs, recipeindex, score) {
+    update(playChefs, recipeIndex, score) {
         this.chefs = playChefs;
-        this.recepeids = recipeindex;
+        this.recepeids = recipeIndex;
         this.score = score;
     }
 }
 
 class EquipTree {
     constructor() {
-        if (this.index === undefined) {
-            this.index = 0;
-        }
-        if (this.children === undefined) {
-            this.children = null;
-        }
-        if (this.leaves === undefined) {
-            this.leaves = null;
-        }
+        this.index = 0;
+        this.children = null;
+        this.leaves = null;
     }
 }
 
 
 class CalRecipe {
     constructor(recipe, count) {
-        if (this.index === undefined) {
-            this.index = 0;
-        }
-        if (this.id === undefined) {
-            this.id = 0;
-        }
-        if (this.count === undefined) {
-            this.count = 0;
-        }
-        if (this.recipeId === undefined) {
-            this.recipeId = 0;
-        }
-        if (this.name === undefined) {
-            this.name = null;
-        }
-        if (this.stirfry === undefined) {
-            this.stirfry = 0;
-        }
-        if (this.boil === undefined) {
-            this.boil = 0;
-        }
-        if (this.knife === undefined) {
-            this.knife = 0;
-        }
-        if (this.fry === undefined) {
-            this.fry = 0;
-        }
-        if (this.bake === undefined) {
-            this.bake = 0;
-        }
-        if (this.steam === undefined) {
-            this.steam = 0;
-        }
-        if (this.rarity === undefined) {
-            this.rarity = 0;
-        }
-        if (this.price === undefined) {
-            this.price = 0;
-        }
-        if (this.exPrice === undefined) {
-            this.exPrice = 0;
-        }
-        if (this.tags === undefined) {
-            this.tags = null;
-        }
-        if (this.attributeTags === undefined) {
-            this.attributeTags = null;
-        }
+        this.index = 0;
+        this.id = 0;
+        this.attributeTags = null;
         this.count = count;
         this.recipeId = recipe.recipeId;
         this.name = recipe.name;
@@ -1871,30 +1579,6 @@ class CalRecipe {
     }
 
     /**
-     * 通过菜谱id和菜谱数量 确定菜谱是否相同
-     * @param {*} o
-     * @return {boolean}
-     */
-    equals(o) {
-        if (this === o)
-            return true;
-        if (!(o != null && o instanceof CalRecipe))
-            return false;
-        const calRecipe = o;
-        if (this.count !== calRecipe.count)
-            return false;
-        return this.recipeId === calRecipe.recipeId;
-    }
-
-    /**
-     * count<<14|recipeid;
-     * @return {number}
-     */
-    hashCode() {
-        return this.id;
-    }
-
-    /**
      *
      * @return {string}
      */
@@ -1906,72 +1590,28 @@ class CalRecipe {
 
 class Chef {
     constructor() {
-        if (this.index === undefined) {
-            this.index = 0;
-        }
-        if (this.chefId === undefined) {
-            this.chefId = 0;
-        }
-        if (this.galleryId === undefined) {
-            this.galleryId = null;
-        }
-        if (this.name === undefined) {
-            this.name = null;
-        }
-        if (this.origin === undefined) {
-            this.origin = null;
-        }
-        if (this.rarity === undefined) {
-            this.rarity = 0;
-        }
-        if (this.bake === undefined) {
-            this.bake = 0;
-        }
-        if (this.boil === undefined) {
-            this.boil = 0;
-        }
-        if (this.stirfry === undefined) {
-            this.stirfry = 0;
-        }
-        if (this.knife === undefined) {
-            this.knife = 0;
-        }
-        if (this.fry === undefined) {
-            this.fry = 0;
-        }
-        if (this.steam === undefined) {
-            this.steam = 0;
-        }
-        if (this.creation === undefined) {
-            this.creation = 0;
-        }
-        if (this.fish === undefined) {
-            this.fish = 0;
-        }
-        if (this.meat === undefined) {
-            this.meat = 0;
-        }
-        if (this.veg === undefined) {
-            this.veg = 0;
-        }
-        if (this.skill === undefined) {
-            this.skill = null;
-        }
-        if (this.ultimateGoal === undefined) {
-            this.ultimateGoal = null;
-        }
-        if (this.ultimateSkill === undefined) {
-            this.ultimateSkill = null;
-        }
-        if (this.tags === undefined) {
-            this.tags = null;
-        }
-        if (this.equip === undefined) {
-            this.equip = null;
-        }
-        if (this.skillEffect === undefined) {
-            this.skillEffect = null;
-        }
+        this.index = 0;
+        this.chefId = 0;
+        this.galleryId = null;
+        this.name = null;
+        this.origin = null;
+        this.rarity = 0;
+        this.bake = 0;
+        this.boil = 0;
+        this.stirfry = 0;
+        this.knife = 0;
+        this.fry = 0;
+        this.steam = 0;
+        this.creation = 0;
+        this.fish = 0;
+        this.meat = 0;
+        this.veg = 0;
+        this.skill = null;
+        this.ultimateGoal = null;
+        this.ultimateSkill = null;
+        this.tags = null;
+        this.equip = null;
+        this.skillEffect = null;
     }
 
     /**
@@ -2002,53 +1642,25 @@ Chef.SEX_WOMAN = 2;
 
 class Effect {
     constructor() {
-        if (this.type === undefined) {
-            this.type = null;
-        }
-        if (this.value === undefined) {
-            this.value = null;
-        }
-        if (this.condition === undefined) {
-            this.condition = null;
-        }
-        if (this.cal === undefined) {
-            this.cal = null;
-        }
-        if (this.rarity === undefined) {
-            this.rarity = null;
-        }
-        if (this.tag === undefined) {
-            this.tag = null;
-        }
+        this.type = null;
+        this.value = null;
+        this.condition = null;
+        this.cal = null;
+        this.rarity = null;
+        this.tag = null;
     }
 }
 
 class Equip {
     constructor() {
-        if (this.index === undefined) {
-            this.index = 0;
-        }
-        if (this.equipId === undefined) {
-            this.equipId = 0;
-        }
-        if (this.galleryId === undefined) {
-            this.galleryId = null;
-        }
-        if (this.name === undefined) {
-            this.name = null;
-        }
-        if (this.rarity === undefined) {
-            this.rarity = 0;
-        }
-        if (this.skill === undefined) {
-            this.skill = null;
-        }
-        if (this.origin === undefined) {
-            this.origin = null;
-        }
-        if (this.skillEffect === undefined) {
-            this.skillEffect = null;
-        }
+        this.index = 0;
+        this.equipId = 0;
+        this.galleryId = null;
+        this.name = null;
+        this.rarity = 0;
+        this.skill = null;
+        this.origin = null;
+        this.skillEffect = null;
     }
 }
 
@@ -2066,79 +1678,56 @@ class Ingredient {
         this.materialId = 0;
         this.name = null;
         this.origin = null;
-
     }
 }
 
 class Material {
     constructor() {
-        if (this.material === undefined) {
-            this.material = 0;
-        }
-        if (this.quantity === undefined) {
-            this.quantity = 0;
-        }
+        this.material = 0;
+        this.quantity = 0;
     }
 }
 
 class MyGameData {
     constructor() {
-        this.chefsMap = ({});
-        this.recipesMap = ({});
-        this.equipsMap = ({});
-        this.chefs = (new Array());
-        this.equips = (new Array());
-        this.recipes = (new Array());
+        this.chefsMap = {};
+        this.recipesMap = {};
+        this.equipsMap = {};
+        this.chefs = [];
+        this.equips = [];
+        this.recipes = [];
     }
 }
 
 class OfficialGameData {
     constructor() {
-        if (this.recipes === undefined) {
-            this.recipes = null;
-        }
-        if (this.materials === undefined) {
-            this.materials = null;
-        }
-        if (this.chefs === undefined) {
-            this.chefs = null;
-        }
-        if (this.equips === undefined) {
-            this.equips = null;
-        }
-        if (this.skills === undefined) {
-            this.skills = null;
-        }
-        this.equipHashMap = (new Map());
-        this.skillHashMap = (new Map());
-        this.ChefHashMap = (new Map());
-        this.RecipeHashMap = (new Map());
+        this.recipes = null;
+        this.materials = null;
+        this.chefs = null;
+        this.equips = null;
+        this.skills = null;
+        this.equipHashMap = new Map();
+        this.skillHashMap = new Map();
+        this.ChefHashMap = new Map();
+        this.RecipeHashMap = new Map();
     }
 
     buildMap() {
         for (let index144 = 0; index144 < this.recipes.length; index144++) {
             let x = this.recipes[index144];
-            {
-                this.RecipeHashMap.set(x.recipeId, x);
-            }
+            this.RecipeHashMap.set(x.recipeId, x);
         }
         for (let index145 = 0; index145 < this.equips.length; index145++) {
             let x = this.equips[index145];
-            {
-                this.equipHashMap.set(x.equipId, x);
-            }
+            this.equipHashMap.set(x.equipId, x);
         }
         for (let index146 = 0; index146 < this.skills.length; index146++) {
             let x = this.skills[index146];
-            {
-                this.skillHashMap.set(x.skillId, x);
-            }
+            this.skillHashMap.set(x.skillId, x);
         }
         for (let index147 = 0; index147 < this.chefs.length; index147++) {
             let x = this.chefs[index147];
-            {
-                this.ChefHashMap.set(x.chefId, x);
-            }
+            this.ChefHashMap.set(x.chefId, x);
         }
     }
 
@@ -2200,14 +1789,12 @@ class MathExtend {
         let result = m;
         let count = 0;
         while ((count < n - 1)) {
-            {
-                if (n === 1) {
-                    return n;
-                } else {
-                    count++;
-                    tmp--;
-                    result = result * tmp;
-                }
+            if (n === 1) {
+                return n;
+            } else {
+                count++;
+                tmp--;
+                result = result * tmp;
             }
         }
         return result;
@@ -2215,29 +1802,9 @@ class MathExtend {
 }
 
 class SortUtils {
-    static shellSort(arr, start, end) {
-        let len = end - start + 1;
-        // gap 即为增量
-        for (let gap = Math.floor(len / 2); gap > 0; gap = Math.floor(gap / 2)) {
-            for (let i = start + gap; i <= end; i++) {
-                let j = i;
-                let current = arr[i];
-                while (j - gap >= start && current < arr[j - gap]) {
-                    arr[j] = arr[j - gap];
-                    j = j - gap;
-                }
-                arr[j] = current;
-            }
-        }
-    }
 
     static quickSort(array) {
-        const stack = (s => {
-            let a = [];
-            while (s-- > 0)
-                a.push(0);
-            return a;
-        })(array.length * 2);
+        const stack = new Array(array.length * 2).fill(0)
         let top = 0;
         let low = 0;
         let high = array.length - 1;
@@ -2251,18 +1818,16 @@ class SortUtils {
             stack[top++] = high;
         }
         while ((top > 0)) {
-            {
-                high = stack[--top];
-                low = stack[--top];
-                par = SortUtils.partion(array, low, high);
-                if (par > low + 1) {
-                    stack[top++] = low;
-                    stack[top++] = par - 1;
-                }
-                if (par < high - 1) {
-                    stack[top++] = par + 1;
-                    stack[top++] = high;
-                }
+            high = stack[--top];
+            low = stack[--top];
+            par = SortUtils.partion(array, low, high);
+            if (par > low + 1) {
+                stack[top++] = low;
+                stack[top++] = par - 1;
+            }
+            if (par < high - 1) {
+                stack[top++] = par + 1;
+                stack[top++] = high;
             }
         }
     }
@@ -2271,27 +1836,21 @@ class SortUtils {
     static partion(array, low, high) {
         const temp = array[low];
         while ((low < high)) {
-            {
-                while (((low < high) && temp <= array[high])) {
-                    {
-                        high--;
-                    }
-                }
-                if (low >= high) {
-                    break;
-                } else {
-                    array[low] = array[high];
-                }
-                while (((low < high) && array[low] <= temp)) {
-                    {
-                        low++;
-                    }
-                }
-                if (low === high) {
-                    break;
-                } else {
-                    array[high] = array[low];
-                }
+            while (((low < high) && temp <= array[high])) {
+                high--;
+            }
+            if (low >= high) {
+                break;
+            } else {
+                array[low] = array[high];
+            }
+            while (((low < high) && array[low] <= temp)) {
+                low++;
+            }
+            if (low === high) {
+                break;
+            } else {
+                array[high] = array[low];
             }
         }
         array[low] = temp;
@@ -2300,15 +1859,11 @@ class SortUtils {
 
     static sort(arr) {
         for (let i = 1; i < arr.length; i++) {
-            {
-                for (let j = 0; j < arr.length - 1; j++) {
-                    {
-                        if (arr[j] > arr[j + 1]) {
-                            const temp = arr[j];
-                            arr[j] = arr[j + 1];
-                            arr[j + 1] = temp;
-                        }
-                    }
+            for (let j = 0; j < arr.length - 1; j++) {
+                if (arr[j] > arr[j + 1]) {
+                    const temp = arr[j];
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = temp;
                 }
             }
         }
@@ -2321,36 +1876,11 @@ IngredientLimit.__static_initialize();
 ChefAndRecipeThread.disordePermuation_$LI$();
 ChefAndRecipeThread.__static_initialize();
 
-async function start() {
-
-    let data = await (await fetch('./json/gameData.json')).json();
-    let myEquipdata = await (await fetch('./json/myequips.json')).json();
-    let myGameData = await (await fetch('./json/myGameData.json')).json();
-    let rewardAndCount = await (await fetch('https://bcjh.xyz/api/get_rule?time=2021-02-12T05%3A00%3A00.000Z')).json();
-    let officialGameData = new OfficialGameData();
-
-
-    officialGameData.chefs = data.chefs;
-    officialGameData.equips = data.equips;
-    officialGameData.materials = data.materials;
-    officialGameData.recipes = data.recipes;
-    officialGameData.skills = data.skills;
-    officialGameData.buildMap();
-
-
-    myGameData.equips = myEquipdata;
-
-    let myGameData1 = importChefsAndRecipesFromFoodGame(officialGameData, myGameData);
-
-    return App.main(officialGameData, myGameData1, rewardAndCount);
-
-}
-
 
 //从图鉴网导入数据
-function importChefsAndRecipesFromFoodGame(officialGameData, foodgameData) {
+function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData) {
     let myGameData = new MyGameData();
-    let recipes = foodgameData.recipes;
+    let recipes = foodGameData.recipes;
 
     let size = recipes.length;
     //菜谱
@@ -2358,10 +1888,10 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodgameData) {
         let jsonRecipe = recipes[i];
         let id = jsonRecipe.id;
 
-        if (jsonRecipe.got == "是") {
+        if (jsonRecipe.got === "是") {
             let recipe = officialGameData.RecipeHashMap.get(id);
             if (recipe != null) {
-                if (jsonRecipe.ex == "是") {
+                if (jsonRecipe.ex === "是") {
                     recipe.price = recipe.price + recipe.exPrice;
                 }
                 myGameData.recipes.push(recipe);
@@ -2369,32 +1899,30 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodgameData) {
         }
     }
 
-
     //厨师
-    let chefs = foodgameData.chefs;
+    let chefs = foodGameData.chefs;
     size = chefs.length;
     for (let i = 0; i < size; i++) {
         let jsonchef = chefs[i];
 
         let id = jsonchef.id;
         let chef = officialGameData.ChefHashMap.get(id);
-        if (chef != null && jsonchef.got == "是") {
-            if (jsonchef.ult != "是") {
+        if (chef != null && jsonchef.got === "是") {
+            if (jsonchef.ult !== "是") {
                 chef.ultimateSkill = null;
             }
             myGameData.chefs.push(chef);
         }
     }
-    let equipmentData = foodgameData.equips;
+    let equipmentData = foodGameData.equips;
     let officialequips = officialGameData.equips;
     //厨具
     size = equipmentData.length;
 
-
     for (let equip of officialequips) {
         for (let i = 0; i < size; i++) {
             let equipname = equipmentData[i];
-            if (equip.name == equipname) {
+            if (equip.name === equipname) {
                 myGameData.equips.push(equip);
                 break;
             }
@@ -2403,36 +1931,4 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodgameData) {
     return myGameData;
 }
 
-
-function getMaterialAndRewardFromJson(jsonObject) {
-    let reward = new Array(10000).fill(-100)
-    let materialCount = new Array(47);
-
-    const rules = jsonObject.rules;
-    for (let i = 0; i < rules.length; i++) {
-        let rule = rules[i];
-        if (rule.Title != null && rule.Title.indexOf('御前') != -1) {
-            let recipeEffect = rule.RecipeEffect;
-            for (let key in recipeEffect) {
-                reward[key] = recipeEffect[key]
-            }
-            if (rule.MaterialsLimit instanceof Object) {
-                let materials = rule.MaterialsLimit;
-                for (let index in materials) {
-                    materialCount[index] = materials[index]
-                }
-            } else {
-                let materialsLimit = rule.MaterialsLimit;
-                materialCount.fill(materialsLimit);
-            }
-            console.log(rule)
-            break;
-        }
-    }
-    return {
-        reward,
-        materialCount
-    }
-}
-
-export {App, OfficialGameData, importChefsAndRecipesFromFoodGame}
+export {GodInference, OfficialGameData, importChefsAndRecipesFromFoodGame, CalConfig}

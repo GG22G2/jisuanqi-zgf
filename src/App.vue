@@ -4,6 +4,10 @@
       <el-tabs type="card" @tab-click="cardClick">
         <el-tab-pane label="计算器">
           <el-row>
+            <el-text class="mx-1" size="large">额外属性值</el-text>
+            <el-input-number :precision="0" :min="0" :max="9999" v-model="calConfig.addBaseValue"></el-input-number>
+          </el-row>
+          <el-row>
             <el-select filterable style="width: 300px" v-model="currentRule" placeholder="请选择厨神计算器">
               <el-option
                   v-for="item in ruleList"
@@ -78,16 +82,20 @@
 
 
 <script>
-import { ElMessage } from 'element-plus'
+
 import { ElNotification } from 'element-plus'
 
-import {App,OfficialGameData,importChefsAndRecipesFromFoodGame} from './core/bundle.js'
+import {OfficialGameData,importChefsAndRecipesFromFoodGame,CalConfig} from './core/bundle.js'
+import {Task} from './core/task.js'
+
+
+
 export default {
   officialGameData: {},
   myGameData: null,
   data() {
     return {
-
+      calConfig:new CalConfig(),
       dataCode: '',
       equips: [],
       checkAll: false,
@@ -124,15 +132,15 @@ export default {
         return;
       }
 
-      let rewardAndCount = null;
+      let ruleStr = null;
 
       // 挑选本周规则，还是历史规则
-      if (this.currentRule == -1) {
-        rewardAndCount = this.curWeekRule;
+      if (this.currentRule === -1) {
+        ruleStr = this.curWeekRule;
       } else {
-        rewardAndCount = await (await fetch(`https://bcjh.xyz/api/get_rule?time=${this.currentRule}`)).json();
+        ruleStr = await (await fetch(`https://bcjh.xyz/api/get_rule?time=${this.currentRule}`)).json();
       }
-      let topResult = await App.main(this.officialGameData, this.myGameData, rewardAndCount);
+      let topResult = await Task.main(this.officialGameData, this.myGameData, ruleStr,this.calConfig);
       console.log(topResult[0].chefs)
       this.topChefs = topResult[0].chefs
       this.topScore = topResult[0].score
@@ -146,6 +154,13 @@ export default {
       if (data == null) {
         return
       }
+
+      if (this.calConfig.addBaseValue>0){
+
+
+      }
+
+
       let officialGameData = new OfficialGameData();
       officialGameData.chefs = data.chefs;
       officialGameData.equips = data.equips;
@@ -165,14 +180,12 @@ export default {
         if (myEquipdata != null) {
           myGameData.equips = myEquipdata;
         }
-        let myGameData1 = importChefsAndRecipesFromFoodGame(officialGameData, myGameData);
-        this.myGameData = myGameData1
+        this.myGameData = importChefsAndRecipesFromFoodGame(officialGameData, myGameData);
       }
 
     },
     getMyEquip() {
       return ["金烤叉", "银烤叉", "铜烤叉", "金平铲", "银平铲", "铜平铲", "金斩骨刀", "银斩骨刀", "铜斩骨刀", "象牙筷", "银骨筷", "铜竹筷", "豪华蒸笼", "双层蒸笼", "简易蒸笼", "金漏勺", "银漏勺", "铜漏勺"];
-      ;
     },
     async updateData() {
       let myGameData = localStorage.getItem('myGameData')
@@ -185,13 +198,13 @@ export default {
     getEquipOrigin(equips) {
       const result = new Set();
       for (let item of equips) {
-        if (item.origin.indexOf('<br>') != -1) {
+        if (item.origin.indexOf('<br>') !== -1) {
           continue;
         }
-        if (item.origin.indexOf('限时任务') != -1) {
+        if (item.origin.indexOf('限时任务') !== -1) {
           continue;
         }
-        if (item.origin.indexOf('主线') != -1) {
+        if (item.origin.indexOf('主线') !== -1) {
           continue;
         }
         result.add(item.origin)
@@ -249,7 +262,7 @@ export default {
     },
     async saveRecipesAndChefsData() {
       let data = await this.loadMyData(this.dataCode);
-      if (data != null && data != '' && data != '数据过期') {
+      if (data != null && data !== '' && data !== '数据过期') {
         ElNotification({
           title: '加载成功',
           message: '加载成功',
@@ -299,18 +312,5 @@ export default {
 
 
 <style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
 
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
-}
 </style>
