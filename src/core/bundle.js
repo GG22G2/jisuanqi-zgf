@@ -1403,7 +1403,6 @@ class Chef {
         this.creation = 0;
         this.fish = 0;
         this.meat = 0;
-        this.veg = 0;
         this.skill = null;
         this.ultimateGoal = null;
         this.ultimateSkill = null;
@@ -1413,7 +1412,6 @@ class Chef {
     }
 
     /**
-     *
      * @return {Chef}
      */
     clone() {

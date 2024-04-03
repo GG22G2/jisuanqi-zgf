@@ -5,7 +5,8 @@
         <el-tab-pane label="计算器">
           <el-row>
             <el-text class="mx-1" size="large">额外属性值</el-text>
-            <el-input-number :precision="0" :min="0" :max="9999" v-model="calConfig.addBaseValue"></el-input-number>
+
+            <el-input-number :precision="0" :min="0" :max="9999" :controls="false" v-model="calConfig.addBaseValue"></el-input-number>
           </el-row>
           <el-row>
             <el-select filterable style="width: 300px" v-model="currentRule" placeholder="请选择厨神计算器">
