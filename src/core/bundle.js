@@ -452,35 +452,31 @@ class GodInference {
      * @param {Chef[]} chefs         厨师数组
      * @param {GlobalAddtion} globalAddtion 全体加成
      */
-    static modifyChefValue(chefs, globalAddtion) {
-        for (let index126 = 0; index126 < chefs.length; index126++) {
-            let chef = chefs[index126];
-            {
-                chef.bake += globalAddtion.bake;
-                chef.boil += globalAddtion.boil;
-                chef.stirfry += globalAddtion.stirfry;
-                chef.steam += globalAddtion.steam;
-                chef.fry += globalAddtion.fry;
-                chef.knife += globalAddtion.knife;
-                const tags = chef.tags;
-                if (tags != null && 0 < /* size */ tags.length) {
-                    for (let index127 = 0; index127 < tags.length; index127++) {
-                        let tag = tags[index127];
-                        {
-                            let value = 0;
-                            if (tag === Chef.SEX_MAN) {
-                                value = globalAddtion.manfill;
-                            } else if (tag === Chef.SEX_WOMAN) {
-                                value = globalAddtion.womanfill;
-                            }
-                            chef.bake += value;
-                            chef.boil += value;
-                            chef.stirfry += value;
-                            chef.steam += value;
-                            chef.fry += value;
-                            chef.knife += value;
-                        }
+    static modifyChefValue(chefs, globalAddition) {
+        for (let i = 0; i < chefs.length; i++) {
+            let chef = chefs[i];
+            chef.bake += globalAddition.bake;
+            chef.boil += globalAddition.boil;
+            chef.stirfry += globalAddition.stirfry;
+            chef.steam += globalAddition.steam;
+            chef.fry += globalAddition.fry;
+            chef.knife += globalAddition.knife;
+            const tags = chef.tags;
+            if (tags != null && 0 < tags.length) {
+                for (let j = 0; j < tags.length; j++) {
+                    let tag = tags[j];
+                    let value = 0;
+                    if (tag === Chef.SEX_MAN) {
+                        value = globalAddition.manfill;
+                    } else if (tag === Chef.SEX_WOMAN) {
+                        value = globalAddition.womanfill;
                     }
+                    chef.bake += value;
+                    chef.boil += value;
+                    chef.stirfry += value;
+                    chef.steam += value;
+                    chef.fry += value;
+                    chef.knife += value;
                 }
             }
         }
@@ -674,17 +670,9 @@ class GodInference {
                 chef: ownChef.name,
                 equip: "",
                 recipes: [
-                    {
-                        recipe: name1,
-                        count: count1
-                    }, {
-                        recipe: name2,
-                        count: count2
-                    },
-                    {
-                        recipe: name3,
-                        count: count3
-                    }
+                    {recipe: name1, count: count1}
+                    , {recipe: name2, count: count2}
+                    , {recipe: name3, count: count3}
                 ]
             })
 
@@ -840,10 +828,10 @@ class GodInference {
         }
 
         this.tempOwnRecipes = this.myGameData.recipes;
-
         for (let tempOwnRecipe of this.tempOwnRecipes) {
             tempOwnRecipe.materials2 = tempOwnRecipe.materials
         }
+
     }
 }
 
@@ -878,20 +866,10 @@ class IngredientLimit {
     static cacheResult_$LI$() {
         IngredientLimit.__static_initialize();
         if (IngredientLimit.cacheResult == null) {
-            IngredientLimit.cacheResult = (function (dims) {
-                let allocate = function (dims) {
-                    if (dims.length === 0) {
-                        return 0;
-                    } else {
-                        let array = [];
-                        for (let i = 0; i < dims[0]; i++) {
-                            array.push(allocate(dims.slice(1)));
-                        }
-                        return array;
-                    }
-                };
-                return allocate(dims);
-            })([1000, 50]);
+            IngredientLimit.cacheResult = new Array(1000);
+            for (let i = 0; i < 1680; i++) {
+                IngredientLimit.cacheResult[i] = new Array(50).fill(0);
+            }
         }
         return IngredientLimit.cacheResult;
     }
@@ -907,7 +885,7 @@ class IngredientLimit {
     cookingQuantit(recipe, expected) {
         const limit = recipe.limit + this.extraLimit[recipe.rarity];
         expected = expected < limit ? expected : limit;
-        return IngredientLimit.cookingQuanttiyAndReduce(/* toArray */((a1, a2) => {
+        return IngredientLimit.cookingQuantitiyAndReduce(((a1, a2) => {
             if (a1.length >= a2.length) {
                 a1.length = 0;
                 a1.push.apply(a1, a2);
@@ -930,7 +908,7 @@ class IngredientLimit {
         return max;
     }
 
-    static cookingQuanttiyAndReduce(materials, expected, materialCount) {
+    static cookingQuantitiyAndReduce(materials, expected, materialCount) {
         let max = expected;
         let t;
         const length = materials.length;
@@ -1021,80 +999,6 @@ class PlayChef {
     }
 }
 
-class builder1 {
-    constructor() {
-        this.officialGameData = null;
-        this.chefname = null;
-        this.equipname = null;
-        this.recipenames = null;
-        this.cookingQuantity = null;
-    }
-
-    setPlay(chefname, equipname, ...params) {
-        this.chefname = chefname;
-        this.equipname = equipname;
-        this.recipenames = params;
-        return this;
-    }
-
-    setQuantity(...params) {
-        this.cookingQuantity = params;
-        return this;
-    }
-
-    setGameData(officialGameData) {
-        this.officialGameData = officialGameData;
-        return this;
-    }
-
-    build() {
-        const playChef = new PlayChef();
-        const recipes = this.officialGameData.recipes;
-        const chefs = this.officialGameData.chefs;
-        const equips = this.officialGameData.equips;
-        const playRecipes = (s => {
-            let a = [];
-            while (s-- > 0)
-                a.push(null);
-            return a;
-        })(this.recipenames.length);
-        for (let i = 0, index = 0; i < this.recipenames.length; i++) {
-            const recipename = this.recipenames[i];
-            for (let index137 = 0; index137 < recipes.length; index137++) {
-                let recipe = recipes[index137];
-
-                if (recipe.name === recipename) {
-                    const playRecipe = new PlayRecipe(recipe, this.cookingQuantity[i]);
-                    playRecipes[index++] = playRecipe;
-                    break;
-                }
-            }
-        }
-        playChef.setRecipes(playRecipes);
-        for (let index138 = 0; index138 < chefs.length; index138++) {
-            let chef = chefs[index138];
-            {
-                if (chef.name === this.chefname) {
-                    playChef.setChef(chef);
-                    break;
-                }
-            }
-        }
-        for (let index139 = 0; index139 < equips.length; index139++) {
-            let equip = equips[index139];
-            {
-                if (equip.name === this.equipname) {
-                    playChef.setEquip(equip);
-                    break;
-                }
-            }
-        }
-        return playChef;
-    }
-}
-
-PlayChef.builder = builder1;
-
 
 class SkillEffect {
     constructor() {
@@ -1130,26 +1034,19 @@ class SkillEffect {
      * @return {SkillEffect}
      */
     clone() {
-        let old = null;
-        try {
-            old = ((o) => {
-                let clone = Object.create(o);
-                for (let p in o) {
-                    if (o.hasOwnProperty(p))
-                        clone[p] = o[p];
-                }
-                return clone;
-            })(this);
-        } catch (e) {
-            console.error(e.message, e);
+        let o = this;
+        let clone = Object.create(o);
+        for (let p in o) {
+            if (o.hasOwnProperty(p))
+                clone[p] = o[p];
         }
-        return old;
+        return clone;
     }
 
     effect(effect) {
         if ("Partial" === effect.condition) {
             if (this.tempAddtion == null) {
-                this.tempAddtion = new TempAddtion();
+                this.tempAddtion = new TempAddition();
             }
             switch ((effect.type)) {
                 case "Bake":
@@ -1207,48 +1104,48 @@ class SkillEffect {
                     if (effect.cal === ("Abs")) {
                         this.knife += effect.value;
                     } else if (effect.cal === ("Percent")) {
-                        this.knifePercent += /* doubleValue */ effect.value / 100;
+                        this.knifePercent += effect.value / 100;
                     }
                     break;
                 case "Stirfry":
                     if (effect.cal === ("Abs")) {
                         this.stirfry += effect.value;
                     } else if (effect.cal === ("Percent")) {
-                        this.stirfryPercent += /* doubleValue */ effect.value / 100;
+                        this.stirfryPercent += effect.value / 100;
                     }
                     break;
                 case "UseBake":
-                    this.usebake += /* doubleValue */ effect.value / 100;
+                    this.usebake += effect.value / 100;
                     break;
                 case "UseSteam":
-                    this.usesteam += /* doubleValue */ effect.value / 100;
+                    this.usesteam += effect.value / 100;
                     break;
                 case "UseBoil":
-                    this.useboil += /* doubleValue */ effect.value / 100;
+                    this.useboil += effect.value / 100;
                     break;
                 case "UseFry":
-                    this.usefry += /* doubleValue */ effect.value / 100;
+                    this.usefry += effect.value / 100;
                     break;
                 case "UseKnife":
-                    this.useknife += /* doubleValue */ effect.value / 100;
+                    this.useknife += effect.value / 100;
                     break;
                 case "UseStirfry":
-                    this.usestirfry += /* doubleValue */ effect.value / 100;
+                    this.usestirfry += effect.value / 100;
                     break;
                 case "UseFish":
-                    this.usefish += /* doubleValue */ effect.value / 100;
+                    this.usefish += effect.value / 100;
                     break;
                 case "UseCreation":
-                    this.usecreation += /* doubleValue */ effect.value / 100;
+                    this.usecreation += effect.value / 100;
                     break;
                 case "UseMeat":
-                    this.usemeat += /* doubleValue */ effect.value / 100;
+                    this.usemeat += effect.value / 100;
                     break;
                 case "UseVegetable":
-                    this.usevegetable += /* doubleValue */ effect.value / 100;
+                    this.usevegetable += effect.value / 100;
                     break;
                 case "Gold_Gain":
-                    this.goldgain += /* doubleValue */ effect.value / 100;
+                    this.goldgain += effect.value / 100;
                     break;
                 default:
                     break;
@@ -1256,104 +1153,10 @@ class SkillEffect {
         }
     }
 
-    globalEffect(globalAddtion) {
-        this.bake += globalAddtion.bake;
-        this.boil += globalAddtion.boil;
-        this.stirfry += globalAddtion.stirfry;
-        this.knife += globalAddtion.knife;
-        this.fry += globalAddtion.fry;
-        this.steam += globalAddtion.steam;
-    }
-
-    templeEffect(tempAddtion) {
-        this.bake += tempAddtion.bake;
-        this.boil += tempAddtion.boil;
-        this.stirfry += tempAddtion.stirfry;
-        this.knife += tempAddtion.knife;
-        this.fry += tempAddtion.fry;
-        this.steam += tempAddtion.steam;
-    }
-
-    calSkill() {
-        if (this.canCal) {
-        }
-        this.canCal = false;
-    }
-
-    addEffect(effect) {
-        this.usesteam += effect.usesteam;
-        this.useboil += effect.useboil;
-        this.usefry += effect.usefry;
-        this.useknife += effect.useknife;
-        this.usestirfry += effect.usestirfry;
-        this.usebake += effect.usebake;
-        this.usefish += effect.usefish;
-        this.usecreation += effect.usecreation;
-        this.usemeat += effect.usemeat;
-        this.usevegetable += effect.usevegetable;
-        this.goldgain += effect.goldgain;
-        this.bake += effect.bake;
-        this.boil += effect.boil;
-        this.stirfry += effect.stirfry;
-        this.knife += effect.knife;
-        this.fry += effect.fry;
-        this.steam += effect.steam;
-        this.bakePercent += effect.bakePercent;
-        this.boilPercent += effect.boilPercent;
-        this.stirfryPercent += effect.stirfryPercent;
-        this.knifePercent += effect.knifePercent;
-        this.fryPercent += effect.fryPercent;
-        this.steamPercent += effect.steamPercent;
-        if (effect.tempAddtion != null) {
-            if (this.tempAddtion == null) {
-                this.tempAddtion = new TempAddtion();
-            }
-            this.tempAddtion.bake += effect.tempAddtion.bake;
-            this.tempAddtion.boil += effect.tempAddtion.boil;
-            this.tempAddtion.stirfry += effect.tempAddtion.stirfry;
-            this.tempAddtion.knife += effect.tempAddtion.knife;
-            this.tempAddtion.fry += effect.tempAddtion.fry;
-            this.tempAddtion.steam += effect.tempAddtion.steam;
-        }
-    }
-
-    reset() {
-        this.usesteam = 0;
-        this.useboil = 0;
-        this.usefry = 0;
-        this.useknife = 0;
-        this.usestirfry = 0;
-        this.usebake = 0;
-        this.usefish = 0;
-        this.usecreation = 0;
-        this.usemeat = 0;
-        this.usevegetable = 0;
-        this.goldgain = 0;
-        this.bake = 0;
-        this.boil = 0;
-        this.stirfry = 0;
-        this.knife = 0;
-        this.fry = 0;
-        this.steam = 0;
-        this.bakePercent = 0;
-        this.boilPercent = 0;
-        this.stirfryPercent = 0;
-        this.knifePercent = 0;
-        this.fryPercent = 0;
-        this.steamPercent = 0;
-        if (this.tempAddtion != null) {
-            this.tempAddtion.bake = 0;
-            this.tempAddtion.boil = 0;
-            this.tempAddtion.stirfry = 0;
-            this.tempAddtion.knife = 0;
-            this.tempAddtion.fry = 0;
-            this.tempAddtion.steam = 0;
-        }
-    }
 }
 
 
-class TempAddtion {
+class TempAddition {
     constructor() {
         this.bake = 0;
         this.boil = 0;
@@ -1548,14 +1351,6 @@ class TopResult {
     }
 }
 
-class EquipTree {
-    constructor() {
-        this.index = 0;
-        this.children = null;
-        this.leaves = null;
-    }
-}
-
 
 class CalRecipe {
     constructor(recipe, count) {
@@ -1579,11 +1374,14 @@ class CalRecipe {
     }
 
     /**
-     *
      * @return {string}
      */
     toString() {
-        return "{\"recipe\" : \"" + this.name + "\", \"count\" :" + this.count + '}';
+        let str = {
+            recipe: this.name,
+            count: this.count
+        }
+        return JSON.stringify(str);
     }
 }
 
@@ -1619,18 +1417,10 @@ class Chef {
      * @return {Chef}
      */
     clone() {
-        let chef1 = null;
-        try {
-            chef1 = ((o) => {
-                let clone = Object.create(o);
-                for (let p in o) {
-                    if (o.hasOwnProperty(p))
-                        clone[p] = o[p];
-                }
-                return clone;
-            })(this);
-        } catch (e) {
-            console.error(e.message, e);
+        let chef1 = Object.create(this);
+        for (let p in this) {
+            if (this.hasOwnProperty(p))
+                chef1[p] = this[p];
         }
         return chef1;
     }
@@ -1639,54 +1429,6 @@ class Chef {
 Chef.SEX_MAN = 1;
 Chef.SEX_WOMAN = 2;
 
-
-class Effect {
-    constructor() {
-        this.type = null;
-        this.value = null;
-        this.condition = null;
-        this.cal = null;
-        this.rarity = null;
-        this.tag = null;
-    }
-}
-
-class Equip {
-    constructor() {
-        this.index = 0;
-        this.equipId = 0;
-        this.galleryId = null;
-        this.name = null;
-        this.rarity = 0;
-        this.skill = null;
-        this.origin = null;
-        this.skillEffect = null;
-    }
-}
-
-class GlobalDate {
-    constructor() {
-        this.ownChefs = null;
-        this.ownRecipes = null;
-        this.ownEquips = null;
-        this.tempCalCache = null;
-    }
-}
-
-class Ingredient {
-    constructor() {
-        this.materialId = 0;
-        this.name = null;
-        this.origin = null;
-    }
-}
-
-class Material {
-    constructor() {
-        this.material = 0;
-        this.quantity = 0;
-    }
-}
 
 class MyGameData {
     constructor() {
@@ -1713,20 +1455,20 @@ class OfficialGameData {
     }
 
     buildMap() {
-        for (let index144 = 0; index144 < this.recipes.length; index144++) {
-            let x = this.recipes[index144];
+        for (let i = 0; i < this.recipes.length; i++) {
+            let x = this.recipes[i];
             this.RecipeHashMap.set(x.recipeId, x);
         }
-        for (let index145 = 0; index145 < this.equips.length; index145++) {
-            let x = this.equips[index145];
+        for (let i = 0; i < this.equips.length; i++) {
+            let x = this.equips[i];
             this.equipHashMap.set(x.equipId, x);
         }
-        for (let index146 = 0; index146 < this.skills.length; index146++) {
-            let x = this.skills[index146];
+        for (let i = 0; i < this.skills.length; i++) {
+            let x = this.skills[i];
             this.skillHashMap.set(x.skillId, x);
         }
-        for (let index147 = 0; index147 < this.chefs.length; index147++) {
-            let x = this.chefs[index147];
+        for (let i = 0; i < this.chefs.length; i++) {
+            let x = this.chefs[i];
             this.ChefHashMap.set(x.chefId, x);
         }
     }
@@ -1736,70 +1478,6 @@ class OfficialGameData {
     }
 }
 
-class Recipe {
-    constructor() {
-        this.index = 0;
-        this.recipeId = 0;
-        this.galleryId = null;
-        this.name = null;
-        this.rarity = 0;
-        this.unlock = null;
-        this.stirfry = 0;
-        this.boil = 0;
-        this.knife = 0;
-        this.fry = 0;
-        this.bake = 0;
-        this.steam = 0;
-        this.materials = null;
-        this.materials2 = null;
-        this.price = 0;
-        this.exPrice = 0;
-        this.time = 0;
-        this.limit = 0;
-        this.origin = null;
-        this.gift = null;
-        this.sortPrice = 0;
-        this.materialRatio = 0;
-        this.tags = [0, 0, 0, 0];
-    }
-}
-
-class Skill {
-    constructor() {
-        this.skillId = 0;
-        this.desc = null;
-        this.effect = null;
-        this.skillEffect = null;
-    }
-}
-
-class MathExtend {
-    /**
-     * 排列组合
-     * A（M,N） 如A(3,2) 则参数 m=3,n=2 结果为
-     *
-     *
-     *
-     * @param {number} m
-     * @param {number} n
-     * @return {number}
-     */
-    static A(m, n) {
-        let tmp = m;
-        let result = m;
-        let count = 0;
-        while ((count < n - 1)) {
-            if (n === 1) {
-                return n;
-            } else {
-                count++;
-                tmp--;
-                result = result * tmp;
-            }
-        }
-        return result;
-    }
-}
 
 class SortUtils {
 
@@ -1881,7 +1559,6 @@ ChefAndRecipeThread.__static_initialize();
 function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData) {
     let myGameData = new MyGameData();
     let recipes = foodGameData.recipes;
-
     let size = recipes.length;
     //菜谱
     for (let i = 0; i < size; i++) {
@@ -1903,32 +1580,95 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData) {
     let chefs = foodGameData.chefs;
     size = chefs.length;
     for (let i = 0; i < size; i++) {
-        let jsonchef = chefs[i];
-
-        let id = jsonchef.id;
+        let jsonChef = chefs[i];
+        let id = jsonChef.id;
         let chef = officialGameData.ChefHashMap.get(id);
-        if (chef != null && jsonchef.got === "是") {
-            if (jsonchef.ult !== "是") {
+        if (chef != null && jsonChef.got === "是") {
+            if (jsonChef.ult !== "是") {
                 chef.ultimateSkill = null;
             }
             myGameData.chefs.push(chef);
         }
     }
-    let equipmentData = foodGameData.equips;
-    let officialequips = officialGameData.equips;
-    //厨具
-    size = equipmentData.length;
 
-    for (let equip of officialequips) {
-        for (let i = 0; i < size; i++) {
-            let equipname = equipmentData[i];
-            if (equip.name === equipname) {
-                myGameData.equips.push(equip);
-                break;
-            }
-        }
-    }
+
     return myGameData;
+}
+
+//这些用不到，但是可以当作参考，知道都有那些字段
+
+
+class Effect {
+    constructor() {
+        this.type = null;
+        this.value = null;
+        this.condition = null;
+        this.cal = null;
+        this.rarity = null;
+        this.tag = null;
+    }
+}
+
+class GlobalDate {
+    constructor() {
+        this.ownChefs = null;
+        this.ownRecipes = null;
+        this.ownEquips = null;
+        this.tempCalCache = null;
+    }
+}
+
+class Ingredient {
+    constructor() {
+        this.materialId = 0;
+        this.name = null;
+        this.origin = null;
+    }
+}
+
+class Material {
+    constructor() {
+        this.material = 0;
+        this.quantity = 0;
+    }
+}
+
+
+class Recipe {
+    constructor() {
+        this.index = 0;
+        this.recipeId = 0;
+        this.galleryId = null;
+        this.name = null;
+        this.rarity = 0;
+        this.unlock = null;
+        this.stirfry = 0;
+        this.boil = 0;
+        this.knife = 0;
+        this.fry = 0;
+        this.bake = 0;
+        this.steam = 0;
+        this.materials = null;
+        this.materials2 = null;
+        this.price = 0;
+        this.exPrice = 0;
+        this.time = 0;
+        this.limit = 0;
+        this.origin = null;
+        this.gift = null;
+        this.sortPrice = 0;
+        this.materialRatio = 0;
+        this.tags = [0, 0, 0, 0];
+    }
+}
+
+class Skill {
+    constructor() {
+        this.skillId = 0;
+        this.desc = null;
+        this.effect = null;
+        this.skillEffect = null;
+    }
 }
 
 export {GodInference, OfficialGameData, importChefsAndRecipesFromFoodGame, CalConfig}
