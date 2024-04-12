@@ -7,6 +7,7 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+    base:'/jisuanqi-zgf',
     server:{
         host: '0.0.0.0',
     },
@@ -19,4 +20,7 @@ export default defineConfig({
           resolvers: [ElementPlusResolver()],
       }),
   ],
+    build:{
+
+    }
 })
