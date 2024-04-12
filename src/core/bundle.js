@@ -668,7 +668,7 @@ class GodInference {
             let count3 = this.ownRecipes[recipeIds[(i * 3) + 2]].count;
             chefs.push({
                 chef: ownChef.name,
-                equip: "",
+                equip: ownChef.remark? ownChef.remark:'',
                 recipes: [
                     {recipe: name1, count: count1}
                     , {recipe: name2, count: count2}
@@ -1448,7 +1448,7 @@ class OfficialGameData {
         this.skills = null;
         this.equipHashMap = new Map();
         this.skillHashMap = new Map();
-        this.ChefHashMap = new Map();
+        this.chefHashMap = new Map();
         this.RecipeHashMap = new Map();
     }
 
@@ -1467,7 +1467,7 @@ class OfficialGameData {
         }
         for (let i = 0; i < this.chefs.length; i++) {
             let x = this.chefs[i];
-            this.ChefHashMap.set(x.chefId, x);
+            this.chefHashMap.set(x.chefId, x);
         }
     }
 
@@ -1553,45 +1553,7 @@ ChefAndRecipeThread.disordePermuation_$LI$();
 ChefAndRecipeThread.__static_initialize();
 
 
-//从图鉴网导入数据
-function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData) {
-    let myGameData = new MyGameData();
-    let recipes = foodGameData.recipes;
-    let size = recipes.length;
-    //菜谱
-    for (let i = 0; i < size; i++) {
-        let jsonRecipe = recipes[i];
-        let id = jsonRecipe.id;
 
-        if (jsonRecipe.got === "是") {
-            let recipe = officialGameData.RecipeHashMap.get(id);
-            if (recipe != null) {
-                if (jsonRecipe.ex === "是") {
-                    recipe.price = recipe.price + recipe.exPrice;
-                }
-                myGameData.recipes.push(recipe);
-            }
-        }
-    }
-
-    //厨师
-    let chefs = foodGameData.chefs;
-    size = chefs.length;
-    for (let i = 0; i < size; i++) {
-        let jsonChef = chefs[i];
-        let id = jsonChef.id;
-        let chef = officialGameData.ChefHashMap.get(id);
-        if (chef != null && jsonChef.got === "是") {
-            if (jsonChef.ult !== "是") {
-                chef.ultimateSkill = null;
-            }
-            myGameData.chefs.push(chef);
-        }
-    }
-
-
-    return myGameData;
-}
 
 //这些用不到，但是可以当作参考，知道都有那些字段
 
@@ -1669,4 +1631,4 @@ class Skill {
     }
 }
 
-export {GodInference, OfficialGameData, importChefsAndRecipesFromFoodGame, CalConfig}
+export {GodInference, OfficialGameData, MyGameData, CalConfig}

@@ -4,9 +4,10 @@
       <el-tabs type="card" @tab-click="cardClick">
         <el-tab-pane label="计算器">
           <el-row>
-            <el-text class="mx-1" size="large">额外属性值</el-text>
+            <el-text class="mx-1" size="large">额外技法值</el-text>
 
-            <el-input-number :precision="0" :min="0" :max="9999" :controls="false" v-model="calConfig.addBaseValue"></el-input-number>
+            <el-input-number :precision="0" :min="0" :max="9999" :controls="false"
+                             v-model="calConfig.addBaseValue"></el-input-number>
           </el-row>
           <el-row>
             <el-select filterable style="width: 300px" v-model="currentRule" placeholder="请选择厨神计算器">
@@ -24,7 +25,7 @@
             <el-col :xs="24" :sm="8" :md="8" :lg="8" v-for="topChef in topChefs">
               <div style="display: flex;align-items: center;height: 150px; gap: 10px;font-size: 14px">
                 <div>{{ topChef.chef }}</div>
-                <div>额外加成</div>
+                <div>{{ topChef.equip }}</div>
                 <div style="display: flex;flex-direction: column;align-items: flex-start;">
                   <div>{{ topChef.recipes[0].recipe }}</div>
                   <div>{{ topChef.recipes[1].recipe }}</div>
@@ -59,18 +60,25 @@
                   placeholder="校验码"
                   v-model="dataCode">
               </el-input>
+
+            </el-col>
+
+            <el-col :span="3">
+              <el-button @click="saveRecipesAndChefsData">导入数据</el-button>
             </el-col>
           </el-row>
-          <el-row>
-            <el-button @click="saveRecipesAndChefsData">导入数据</el-button>
-          </el-row>
-
-
         </el-tab-pane>
         <el-tab-pane label="说明">
           奖励倍数取自白采菊花
           <br/>
           游戏数据取自图鉴网
+          <br/>
+          计算器只是为了能拿到高保
+          <br/>
+          计算器不考虑厨具，不考虑厨师在场时给其他厨师的加成技能,没有调料和心法盘
+          <br/>
+          计算器可以设置额外技法值，已考虑厨师修炼和菜谱专精
+
           <br/>
         </el-tab-pane>
 
@@ -84,24 +92,18 @@
 
 <script>
 
-import { ElNotification } from 'element-plus'
+import {ElNotification} from 'element-plus'
 
-import {OfficialGameData,importChefsAndRecipesFromFoodGame,CalConfig} from './core/bundle.js'
-import {Task} from './core/task.js'
-
+import {CalConfig} from './core/bundle.js'
+import {parseData, Task} from './core/task.js'
 
 
 export default {
-  officialGameData: {},
-  myGameData: null,
   data() {
     return {
-      calConfig:new CalConfig(),
+      calConfig: new CalConfig(),
       dataCode: '',
-      equips: [],
-      checkAll: false,
       isIndeterminate: true,
-      equipOrigins: ['新手奖池'],
       currentRule: '',
       ruleList: [],
       curWeekRule: null,
@@ -124,10 +126,12 @@ export default {
   },
   methods: {
     async calculator() {
-      if (this.officialGameData == null || this.myGameData == null) {
+      let {officialGameData, myGameData} = await this.loadData();
+
+      if (officialGameData == null || myGameData == null) {
         ElNotification({
           title: '无法计算',
-          message: '没有厨师或厨具配置，无法计算',
+          message: '缺少游戏数据，无法计算',
           type: 'error',
         })
         return;
@@ -141,83 +145,25 @@ export default {
       } else {
         ruleStr = await (await fetch(`https://bcjh.xyz/api/get_rule?time=${this.currentRule}`)).json();
       }
-      let topResult = await Task.main(this.officialGameData, this.myGameData, ruleStr,this.calConfig);
+      let topResult = await Task.main(officialGameData, myGameData, ruleStr, this.calConfig);
       console.log(topResult[0].chefs)
       this.topChefs = topResult[0].chefs
       this.topScore = topResult[0].score
     },
     async init() {
       await this.initRuleSelected();
-      await this.loadData();
     },
     async loadData() {
-      let data = await this.getOfficeGameData();
-      if (data == null) {
+      let gameData = await this.getOfficeGameData();
+      let myGameData = localStorage.getItem('myGameData');
+      if (gameData == null || myGameData == null) {
         return
       }
-
-      if (this.calConfig.addBaseValue>0){
-
-
-      }
-
-
-      let officialGameData = new OfficialGameData();
-      officialGameData.chefs = data.chefs;
-      officialGameData.equips = data.equips;
-      officialGameData.materials = data.materials;
-      officialGameData.recipes = data.recipes;
-      officialGameData.skills = data.skills;
-      officialGameData.buildMap();
-      this.officialGameData = officialGameData;
-
-      this.getEquipOrigin(data.equips)
-
-      let myGameData = localStorage.getItem('myGameData');
-      if (myGameData != null) {
-        myGameData = JSON.parse(myGameData);
-        let myEquipdata = await this.getMyEquip();
-
-        if (myEquipdata != null) {
-          myGameData.equips = myEquipdata;
-        }
-        this.myGameData = importChefsAndRecipesFromFoodGame(officialGameData, myGameData);
-      }
-
-    },
-    getMyEquip() {
-      return ["金烤叉", "银烤叉", "铜烤叉", "金平铲", "银平铲", "铜平铲", "金斩骨刀", "银斩骨刀", "铜斩骨刀", "象牙筷", "银骨筷", "铜竹筷", "豪华蒸笼", "双层蒸笼", "简易蒸笼", "金漏勺", "银漏勺", "铜漏勺"];
-    },
-    async updateData() {
-      let myGameData = localStorage.getItem('myGameData')
-      if (myGameData != null) {
-        myGameData = JSON.parse(myGameData);
-        myGameData.equips = this.getMyEquip();
-        this.myGameData = importChefsAndRecipesFromFoodGame(this.officialGameData, myGameData)
-      }
-    },
-    getEquipOrigin(equips) {
-      const result = new Set();
-      for (let item of equips) {
-        if (item.origin.indexOf('<br>') !== -1) {
-          continue;
-        }
-        if (item.origin.indexOf('限时任务') !== -1) {
-          continue;
-        }
-        if (item.origin.indexOf('主线') !== -1) {
-          continue;
-        }
-        result.add(item.origin)
-      }
-      this.equipOrigins = []
-      for (let originName of result) {
-        this.equipOrigins.push(originName)
-      }
+      myGameData = JSON.parse(myGameData);
+      return parseData(gameData,myGameData,this.calConfig);
     },
     async initRuleSelected() {
       let data = await (await fetch('https://bcjh.xyz/api/get_etc_rule')).json();
-
       //如果是周五下午到周日22点，则尝试获取本周的厨神数据
       let curWeekRuleResult = await this.getCurrentWeekRule();
 
@@ -270,8 +216,7 @@ export default {
           type: 'success',
         })
         localStorage.setItem('myGameData', JSON.stringify(data))
-        this.updateData(data)
-      }else {
+      } else {
         ElNotification({
           title: '加载失败',
           message: data,
