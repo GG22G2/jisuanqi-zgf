@@ -408,7 +408,7 @@ class GodInference {
 
         let topPlayChefs = [];
         let total = this.playRecipes.length;
-        let groupNum = 1; //线程数
+        let groupNum = 4; //线程数
         let maxScoreKey = BigInt(0);
         let works = []
         let that = this;
