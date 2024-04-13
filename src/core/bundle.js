@@ -1,5 +1,5 @@
 /* Generated from Java with JSweet 3.0.0 - http://www.jsweet.org */
-
+import {ChefAndRecipeThread} from "./calThread.js";
 
 class CalConfig {
     /**
@@ -113,176 +113,8 @@ class CacheKitchenGodCal {
     }
 }
 
-class ChefAndRecipeThread {
-    constructor(start, limit) {
-        this.playRecipes = null;
-        this.playChefs = null;
-        this.start = 0;
-        this.scoreCache = null;
-        this.scoreCacheNoEquipIndex = null;
-        this.scoreAddCacheNoEquip = null;
-        this.recipe2Change = null;
-        this.start = start;
-        this.limit = limit;
-    }
 
-    static __static_initialize() {
-        if (!ChefAndRecipeThread.__static_initialized) {
-            ChefAndRecipeThread.__static_initialized = true;
-            ChefAndRecipeThread.__static_initializer_0();
-        }
-    }
-
-    static disordePermuation_$LI$() {
-        ChefAndRecipeThread.__static_initialize();
-        if (ChefAndRecipeThread.disordePermuation == null) {
-            ChefAndRecipeThread.disordePermuation = new Array(1680);
-            for (let i = 0; i < 1680; i++) {
-                ChefAndRecipeThread.disordePermuation[i] = new Array(9).fill(0);
-            }
-        }
-        return ChefAndRecipeThread.disordePermuation;
-    }
-
-    static __static_initializer_0() {
-        const needPermuation = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-        ChefAndRecipeThread.permute(needPermuation, [0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0], 0);
-    }
-
-    setBaseData(playRecipes, playChefs, recipe2Change, tempCalCache) {
-        this.playRecipes = playRecipes;
-        this.playChefs = playChefs;
-        this.scoreCache = tempCalCache.scoreCacheNoEquip;
-        this.scoreCacheNoEquipIndex = tempCalCache.scoreCacheNoEquipIndex;
-        this.scoreAddCacheNoEquip = tempCalCache.scoreAddCacheNoEquip;
-        this.recipe2Change = recipe2Change;
-    }
-
-    /**
-     * @return {BigInt} 返回得分最高的tomNum个结果，结果是有序的，已经按照得分从高到底排序了
-     */
-    call() {
-        let starttime = Date.now(), endtime = 0;
-
-        let playChefs2 = new Array(this.playChefs.length);
-        for (let i = 0; i < playChefs2.length; i++) {
-            playChefs2[i] = this.playChefs[i][2];
-        }
-
-        let noCanUseScoreIndex = new Array(this.scoreAddCacheNoEquip.length).fill(false);
-        //获取所有组合中最高的一组分数
-        let maxGroupScore = 0;
-        for (let i = 0; i < this.scoreAddCacheNoEquip.length; i++) {
-            for (let s of this.scoreAddCacheNoEquip[i]) {
-                if (s > maxGroupScore) {
-                    maxGroupScore = s;
-                }
-            }
-        }
-        maxGroupScore = (0.35 * maxGroupScore);//将最高分的35%作为基准，低于这个的组和不做考虑
-
-        for (let i = 0; i < this.scoreAddCacheNoEquip.length; i++) {
-            let t = 0;
-            let hasBigScore = false;
-            for (let s of this.scoreAddCacheNoEquip[i]) {
-                t += s;
-                if (s > maxGroupScore) {
-                    hasBigScore = true;
-                }
-            }
-            noCanUseScoreIndex[i] = t === 0 || !hasBigScore;
-        }
-
-        console.log(maxGroupScore)
-
-        let topKValueInt = 0, maxScore = 0, maxKey = BigInt(0);
-        let score1Index, score2Index, score3Index;
-        for (let i = this.start; i < this.limit; i++) {
-            const precipes = this.playRecipes[i];
-            let cal = 0;
-            for (let k = 0; k < 1680; k++) {
-
-                const ints = ChefAndRecipeThread.disordePermuation_$LI$()[k];
-                score1Index = this.scoreCacheNoEquipIndex[precipes[ints[0]]][precipes[ints[1]]] + (precipes[ints[2]] - precipes[ints[1]] - 1);
-                score2Index = this.scoreCacheNoEquipIndex[precipes[ints[3]]][precipes[ints[4]]] + (precipes[ints[5]] - precipes[ints[4]] - 1);
-                score3Index = this.scoreCacheNoEquipIndex[precipes[ints[6]]][precipes[ints[7]]] + (precipes[ints[8]] - precipes[ints[7]] - 1);
-
-                if (noCanUseScoreIndex[score1Index] || noCanUseScoreIndex[score2Index] || noCanUseScoreIndex[score3Index]) {
-                    continue;
-                }
-                let chef3RecipeScore = this.scoreAddCacheNoEquip[score3Index];
-
-                for (let j = 0, i9 = 0, score2 = 0, chef2Limit; j < this.recipe2Change.length; j++) {
-                    chef2Limit = this.recipe2Change[j];
-                    let playChef = this.playChefs[i9]; //获取一个厨师组合
-
-                    let s1 = this.scoreAddCacheNoEquip[score1Index][playChef[0]];
-                    if (s1 === 0) {
-                        i9 = chef2Limit;
-                        continue;
-                    }
-                    score2 = s1 + this.scoreAddCacheNoEquip[score2Index][playChef[1]]; //计算这个厨师组合中前两个厨师的得分
-                    if (score2 === 0) {
-                        i9 = chef2Limit;
-                        continue;
-                    }
-                    for (let score3Limit = Math.max(topKValueInt - score2, 0); i9 < chef2Limit; i9++) {
-                        cal = chef3RecipeScore[playChefs2[i9]];
-                        if (cal > score3Limit) {
-                            cal += score2;
-                            if (cal > maxScore) {
-                                maxScore = cal;
-                                // i k ,i9   菜谱 i(0-2304)12位，  菜谱排列 k(0-1680)11位，  厨师组合 i2(0-795)12位
-                                //将得分， 菜谱，菜谱排列，厨师组合索引组合成long保存， 得分(cal)在高位，这样新的cal可以用来排序
-                                // 1符号位，20位得分，18位菜谱索引，11位菜谱排列，14位厨师索引
-                                let bigCal = BigInt(cal);
-                                maxKey = ((((bigCal << 18n | BigInt(i)) << 11n) | BigInt(k)) << 14n) | BigInt(i9);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        endtime = /* currentTimeMillis */ Date.now();
-        console.info((this.limit - this.start) + "全菜谱 全厨师 无厨具排列结果用时:" + (endtime - starttime) + "ms");
-        return maxKey;
-    }
-
-
-    static permute(need, tmp, count, start) {
-        if ((count[0] + count[1] + count[2]) === 9) {
-            for (let i = 0; i < 9; i++) {
-                ChefAndRecipeThread.disordePermuation_$LI$()[ChefAndRecipeThread.index][i] = tmp[i];
-            }
-            ChefAndRecipeThread.index++;
-            return;
-        }
-        for (let j = 0; j < 3; j++) {
-            if (count[j] === 3) {
-                continue;
-            }
-            tmp[(j * 3) + count[j]] = need[start];
-            count[j]++;
-            ChefAndRecipeThread.permute(need, tmp, count, start + 1);
-            count[j]--;
-        }
-    }
-}
-
-ChefAndRecipeThread.__static_initialized = false;
-ChefAndRecipeThread.tomNum = 200000;
-/**
- * 将一组有序的菜谱排列，  生成其所有的无序排列情况
- * 这里的排序可以理解为，有三个桶，每个桶中可以放三个元素（桶中元素不考虑顺序）， 计算有多少种放置方法
- *
- * @param playress 有序的菜谱排列
- * @param start    当前排列的元素（0-8）
- * @param count    记录一组无序排列情况中，排列元素个数
- */
-ChefAndRecipeThread.index = 0;
-
-class GlobalAddtion {
+class GlobalAddition {
     constructor(chefs, skills1) {
         this.bake = 0;
         this.boil = 0;
@@ -419,7 +251,7 @@ class PlayRecipe {
 
 class GodInference {
     constructor(reward, sexReward, materials, calConfig, officialGameData, myGameData) {
-        this.segmentnums = 300;
+        this.segmentnums = 800;
         this.chefMinRaritySum = 14;
         this.deepLimit = [0, 6, 3, 3, 2, 2, 2, 2, 2, 2];
         this.ownChefs = null;
@@ -442,7 +274,7 @@ class GodInference {
         this.sexReward = sexReward;
         this.officialGameData = officialGameData;
         this.myGameData = myGameData;
-        this.globalAddtion = new GlobalAddtion(myGameData.chefs, officialGameData.skills);
+        this.globalAddtion = new GlobalAddition(myGameData.chefs, officialGameData.skills);
         this.initOwn();
         GodInference.modifyChefValue(this.ownChefs, this.globalAddtion);
         this.buildRecipeTags();
@@ -450,7 +282,7 @@ class GodInference {
 
     /**
      * @param {Chef[]} chefs         厨师数组
-     * @param {GlobalAddtion} globalAddtion 全体加成
+     * @param {GlobalAddition} globalAddtion 全体加成
      */
     static modifyChefValue(chefs, globalAddition) {
         for (let i = 0; i < chefs.length; i++) {
@@ -555,18 +387,11 @@ class GodInference {
             this.buildCache();
         }
         this.buildPermutation();
-        let start;
-        let end;
-        start = Date.now();
-        const total = this.playRecipes.length;
-        const t1 = total / this.segmentnums;
-        let groupnum = (((t1 | 0) < t1 ? t1 + 1 : t1) | 0);
+        let start = Date.now() ,end;
         const playRecipes2 = new Array(this.playRecipes.length);
-
         for (let i = 0; i < playRecipes2.length; i++) {
             playRecipes2[i] = new Array(9).fill(0);
         }
-
 
         const idToIndex = new Map();
         for (let i = 0; i < this.ownRecipes.length; i++) {
@@ -581,33 +406,76 @@ class GodInference {
             SortUtils.quickSort(playRecipes2[i]);
         }
 
-        let topPlayChers = [];
-
-        groupnum = 1;
+        let topPlayChefs = [];
+        let total = this.playRecipes.length;
+        let groupNum = 1; //线程数
         let maxScoreKey = BigInt(0);
-        for (let i = 0; i < groupnum; i++) {
-            let chefAndRecipeThread;
-            if (i === groupnum - 1) {
-                chefAndRecipeThread = new ChefAndRecipeThread(i * this.segmentnums, total);
-            } else {
-                chefAndRecipeThread = new ChefAndRecipeThread(i * this.segmentnums, (i + 1) * this.segmentnums);
+        let works = []
+        let that = this;
+        let totalP = groupNum * 100;
+        let curP = 0;
+        let resultCount = 0;
+        this.segmentnums = total / groupNum;
+        let data = JSON.stringify( {playRecipes2,
+            playChefs: this.playChefs,
+            recipe2Change: GodInference.recipe2Change,
+            tempCalCache: this.tempCalCache});
+
+        return new Promise(resolve => {
+            for (let i = 0; i < groupNum; i++) {
+                let calWorker;
+                calWorker = new Worker(new URL('./worker.js', import.meta.url))
+                works.push(calWorker)
+                calWorker.onmessage = function (event) {
+                    if (event.data.type === 'p') {
+                        curP += event.data.p;
+                        postMessage(curP / totalP * 100)
+                    } else {
+                        const topScoreKey = event.data.maxK;
+                        resultCount++;
+                        if (topScoreKey > maxScoreKey) {
+                            maxScoreKey = topScoreKey;
+                        }
+                        if (resultCount === groupNum) {
+                            topPlayChefs = that.parseLong(playRecipes2, that.playChefs, maxScoreKey);
+                            end = Date.now();
+                            console.info("全菜谱 全厨师 无厨具排列结果用时::" + (end - start) + "ms");
+                            postMessage(100)
+                            for (let work of works) {
+                                work.terminate();
+                            }
+                            resolve(that.calSecondStage(topPlayChefs));
+
+                        }
+                    }
+                };
+                console.time("start")
+                // JSON.stringify( {playRecipes2,
+                //     playChefs: this.playChefs,
+                //     recipe2Change: GodInference.recipe2Change,
+                //     tempCalCache: this.tempCalCache})
+
+
+                if (i === groupNum - 1) {
+                    calWorker.postMessage({
+                        start: i * this.segmentnums,
+                        end: total,
+                        data:data
+                    })
+                } else {
+                    calWorker.postMessage({
+                        start: i * this.segmentnums,
+                        end: (i + 1) * this.segmentnums,
+                        data:data
+                    })
+                }
+                //calWorker.postMessage(data)
+                console.timeEnd("start")
             }
-            chefAndRecipeThread.setBaseData(playRecipes2, this.playChefs, GodInference.recipe2Change, this.tempCalCache);
-            const topScoreKey = chefAndRecipeThread.call();
-            if (topScoreKey > maxScoreKey) {
-                maxScoreKey = topScoreKey;
-            }
 
-        }
-
-        topPlayChers = this.parseLong(playRecipes2, this.playChefs, maxScoreKey);
-        console.log(topPlayChers)
-        end = Date.now();
-        console.info("全菜谱 全厨师 无厨具排列结果用时::" + (end - start) + "ms");
-        return this.calSecondStage(topPlayChers);
-
-
+        });
     }
+
 
     /**
      * 保存得分 菜谱，菜谱排列，厨师组合索引   1符号位，20位得分，18位菜谱索引，11位菜谱排列，14位厨师索引
@@ -650,12 +518,12 @@ class GodInference {
 
     /**
      * 第二阶段的计算
-     * @param {TopResult[]} topPlayChers
+     * @param {TopResult} topPlayChef
      */
-    calSecondStage(topPlayCher) {
-        console.log(topPlayCher.score)
-        let chefIds = topPlayCher.chefs;
-        let recipeIds = topPlayCher.recepeids;
+    calSecondStage(topPlayChef) {
+        console.log(topPlayChef.score)
+        let chefIds = topPlayChef.chefs;
+        let recipeIds = topPlayChef.recepeids;
         let result = []
         let chefs = [];
         for (let i = 0; i < 3; i++) {
@@ -668,7 +536,7 @@ class GodInference {
             let count3 = this.ownRecipes[recipeIds[(i * 3) + 2]].count;
             chefs.push({
                 chef: ownChef.name,
-                equip: ownChef.remark? ownChef.remark:'',
+                equip: ownChef.remark ? ownChef.remark : '',
                 recipes: [
                     {recipe: name1, count: count1}
                     , {recipe: name2, count: count2}
@@ -680,7 +548,7 @@ class GodInference {
 
         result = {
             chefs,
-            score: topPlayCher.score
+            score: topPlayChef.score
         }
 
         return [result]
@@ -1549,10 +1417,6 @@ class SortUtils {
 
 IngredientLimit.cacheResult_$LI$();
 IngredientLimit.__static_initialize();
-ChefAndRecipeThread.disordePermuation_$LI$();
-ChefAndRecipeThread.__static_initialize();
-
-
 
 
 //这些用不到，但是可以当作参考，知道都有那些字段

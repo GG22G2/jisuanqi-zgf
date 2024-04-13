@@ -21,6 +21,11 @@
           </el-row>
 
           <el-row>
+            <el-col :xs="24" :sm="8" :md="8" :lg="8">
+              <el-progress v-show="showPercentage" :percentage="percentage" :color="'#67c23a'"></el-progress>
+            </el-col>
+          </el-row>
+          <el-row>
             <el-col><span>{{ topScore }}</span></el-col>
             <el-col :xs="24" :sm="8" :md="8" :lg="8" v-for="topChef in topChefs">
               <div style="display: flex;align-items: center;height: 150px; gap: 10px;font-size: 14px">
@@ -78,7 +83,6 @@
           计算器不考虑厨具，不考虑厨师在场时给其他厨师的加成技能,没有调料和心法盘
           <br/>
           计算器可以设置额外技法值，已考虑厨师修炼和菜谱专精
-
           <br/>
         </el-tab-pane>
 
@@ -102,6 +106,8 @@ export default {
   data() {
     return {
       calConfig: new CalConfig(),
+      percentage:0,
+      showPercentage:false,
       dataCode: '',
       isIndeterminate: true,
       currentRule: '',
@@ -126,6 +132,8 @@ export default {
   },
   methods: {
     async calculator() {
+      this.topChefs.length=0;
+      this.topScore=null;
       let {officialGameData, myGameData} = await this.loadData();
 
       if (officialGameData == null || myGameData == null) {
@@ -136,9 +144,21 @@ export default {
         })
         return;
       }
+      this.percentage=0;
+      // window.addEventListener(
+      //     "message",
+      //     (event) => {
+      //       //console.log(event.data)
+      //
+      //     },
+      //     false,
+      // );
+      window.onmessage=(event)=>{
+        this.percentage = Math.round(event.data);
+      }
 
       let ruleStr = null;
-
+      this.showPercentage =true;
       // 挑选本周规则，还是历史规则
       if (this.currentRule === -1) {
         ruleStr = this.curWeekRule;
@@ -149,6 +169,9 @@ export default {
       console.log(topResult[0].chefs)
       this.topChefs = topResult[0].chefs
       this.topScore = topResult[0].score
+
+     // this.showPercentage =false;
+     // this.percentage=0;
     },
     async init() {
       await this.initRuleSelected();
@@ -166,7 +189,6 @@ export default {
       let data = await (await fetch('https://bcjh.xyz/api/get_etc_rule')).json();
       //如果是周五下午到周日22点，则尝试获取本周的厨神数据
       let curWeekRuleResult = await this.getCurrentWeekRule();
-
       this.ruleList = []
       if (curWeekRuleResult) {
         this.ruleList.push({
@@ -174,7 +196,6 @@ export default {
           value: -1
         })
       }
-
       let ruleList = this.ruleList;
       for (let item of data) {
         ruleList.push({

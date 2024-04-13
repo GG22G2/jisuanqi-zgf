@@ -2,12 +2,12 @@ import {GodInference, OfficialGameData, MyGameData} from './bundle.js'
 
 class Task {
     static main(officialGameData, myGameData, ruleStr, config) {
-        return new Promise(resolve => {
+
             let rule = parseRule(ruleStr)
             let TopResult = Task.defaultTask(officialGameData, myGameData, rule, config);
             // let TopResult = App.testTask(officialGameData, myGameData);
-            resolve(TopResult)
-        });
+            return TopResult;
+
         //App.testTask(officialGameData, myGameData);
     }
 
