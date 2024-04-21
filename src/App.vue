@@ -129,6 +129,9 @@ export default {
   },
   created() {
     this.init();
+    window.onmessage=(event)=>{
+      this.percentage = Math.round(event.data);
+    }
   },
   methods: {
     async calculator() {
@@ -145,17 +148,8 @@ export default {
         return;
       }
       this.percentage=0;
-      // window.addEventListener(
-      //     "message",
-      //     (event) => {
-      //       //console.log(event.data)
-      //
-      //     },
-      //     false,
-      // );
-      window.onmessage=(event)=>{
-        this.percentage = Math.round(event.data);
-      }
+
+
 
       let ruleStr = null;
       this.showPercentage =true;
@@ -169,9 +163,6 @@ export default {
       console.log(topResult[0].chefs)
       this.topChefs = topResult[0].chefs
       this.topScore = topResult[0].score
-
-     // this.showPercentage =false;
-     // this.percentage=0;
     },
     async init() {
       await this.initRuleSelected();

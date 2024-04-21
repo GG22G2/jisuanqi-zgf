@@ -3,10 +3,10 @@ import {GodInference, OfficialGameData, MyGameData} from './bundle.js'
 class Task {
     static main(officialGameData, myGameData, ruleStr, config) {
 
-            let rule = parseRule(ruleStr)
-            let TopResult = Task.defaultTask(officialGameData, myGameData, rule, config);
-            // let TopResult = App.testTask(officialGameData, myGameData);
-            return TopResult;
+        let rule = parseRule(officialGameData, ruleStr)
+        let TopResult = Task.defaultTask(officialGameData, myGameData, rule, config);
+        // let TopResult = App.testTask(officialGameData, myGameData);
+        return TopResult;
 
         //App.testTask(officialGameData, myGameData);
     }
@@ -60,12 +60,12 @@ function parseData(gameData, myGameData, calConfig) {
 
     return {
         officialGameData: officialGameData,
-        myGameData: importChefsAndRecipesFromFoodGame(officialGameData, myGameData,calConfig)
+        myGameData: importChefsAndRecipesFromFoodGame(officialGameData, myGameData, calConfig)
     }
 }
 
 //从图鉴网导入数据
-function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData,calConfig) {
+function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calConfig) {
     let myGameData = new MyGameData();
     let recipes = foodGameData.recipes;
     let size = recipes.length;
@@ -96,15 +96,15 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData,calCon
             let delSkill = false;
             if (jsonChef.ult !== "是") {
                 chef.ultimateSkill = null;
-                delSkill  = true;
+                delSkill = true;
             }
             myGameData.chefs.push(chef);
 
-            if (chef.rarity === 5 && calConfig.addBaseValue>0) {
+            if (chef.rarity === 5 && calConfig.addBaseValue > 0) {
                 //5星的厨师，在生成一份技法增加60/100的版本
-                let chefIds = generateChefIds(chef,calConfig.addBaseValue);
+                let chefIds = generateChefIds(chef, calConfig.addBaseValue);
                 for (let chefId of chefIds) {
-                  let  chef2 = officialGameData.chefHashMap.get(chefId);
+                    let chef2 = officialGameData.chefHashMap.get(chefId);
                     if (delSkill) {
                         chef2.ultimateSkill = null;
                     }
@@ -144,11 +144,6 @@ function generateChefIds(chef, appendValue) {
     }
 
 
-
-
-
-
-
     return chefIds;
 }
 
@@ -161,7 +156,7 @@ function generateChefs(chef, appendValue) {
         newChef.bake += appendValue;
         newChef.chefId = (1 << 28 | (appendValue << 12) | chef.chefId);
         chefs.push(newChef);
-        newChef.remark = "烤 "+appendValue;
+        newChef.remark = "烤 " + appendValue;
     }
 
     if (chef.boil !== 0) {
@@ -169,7 +164,7 @@ function generateChefs(chef, appendValue) {
         newChef.boil += appendValue;
         newChef.chefId = (2 << 28 | (appendValue << 12) | chef.chefId);
         chefs.push(newChef);
-        newChef.remark = "煮 "+appendValue;
+        newChef.remark = "煮 " + appendValue;
     }
 
     if (chef.stirfry !== 0) {
@@ -177,7 +172,7 @@ function generateChefs(chef, appendValue) {
         newChef.stirfry += appendValue;
         newChef.chefId = (3 << 28 | (appendValue << 12) | chef.chefId);
         chefs.push(newChef);
-        newChef.remark = "炒 "+appendValue;
+        newChef.remark = "炒 " + appendValue;
     }
 
     if (chef.knife !== 0) {
@@ -185,15 +180,15 @@ function generateChefs(chef, appendValue) {
         newChef.knife += appendValue;
         newChef.chefId = (4 << 28 | (appendValue << 12) | chef.chefId);
         chefs.push(newChef);
-        newChef.remark = "切 "+appendValue;
+        newChef.remark = "切 " + appendValue;
     }
 
-   if (chef.fry !== 0) {
+    if (chef.fry !== 0) {
         newChef = cloneChef(chef);
         newChef.fry += appendValue;
         newChef.chefId = (5 << 28 | (appendValue << 12) | chef.chefId);
         chefs.push(newChef);
-       newChef.remark = "炸 "+appendValue;
+        newChef.remark = "炸 " + appendValue;
     }
 
     if (chef.steam !== 0) {
@@ -201,7 +196,7 @@ function generateChefs(chef, appendValue) {
         newChef.steam += appendValue;
         newChef.chefId = (6 << 28 | (appendValue << 12) | chef.chefId);
         chefs.push(newChef);
-        newChef.remark = "蒸 "+appendValue;
+        newChef.remark = "蒸 " + appendValue;
     }
 
     return chefs;
@@ -217,19 +212,35 @@ function cloneChef(chef) {
     return chef1;
 }
 
-function parseRule(jsonObjectRule) {
-    let reward = new Array(10000).fill(-100)
+/**
+ * 规则可以分为两类，一类是对菜谱本身的加成
+ * 另一类的跟据厨师确定给菜谱的加成，比如性别加成
+ *
+ * */
+function parseRule(officialGameData, jsonObjectRule) {
+    let reward = new Array(10000).fill(-1000)
     let materialCount = new Array(47);
     let sexReward = [0.0, 0.0]
+    let recipes = officialGameData.recipes
+
+
     const rules = jsonObjectRule.rules;
     for (let i = 0; i < rules.length; i++) {
         let rule = rules[i];
         if (rule.Title != null && rule.Title.indexOf('御前') !== -1) {
-            let recipeEffect = rule.RecipeEffect;
 
-            for (let key in recipeEffect) {
-                reward[key] = recipeEffect[key]
+            //奖励倍数
+            if (rule.RecipeEffect) {
+                let recipeEffect = rule.RecipeEffect;
+                for (let key in recipeEffect) {
+                    reward[key] = recipeEffect[key]
+                }
+            }else {
+                reward = reward.fill(0)
+                console.log('没有奖励倍数',rule)
             }
+
+            //食材数量
             if (rule.MaterialsLimit instanceof Object) {
                 let materials = rule.MaterialsLimit;
                 for (let index in materials) {
@@ -239,14 +250,64 @@ function parseRule(jsonObjectRule) {
                 let materialsLimit = rule.MaterialsLimit;
                 materialCount.fill(materialsLimit);
             }
+
+            //厨师性别影响
             if (rule.ChefTagEffect) {
                 sexReward[0] = rule.ChefTagEffect["1"]
                 sexReward[1] = rule.ChefTagEffect["2"]
             }
-            console.log(rule)
+
+            //酸甜苦辣鲜咸影响
+            if (rule.CondimentEffect) {
+                let CondimentEffect = rule.CondimentEffect;
+                for (const recipe of recipes) {
+                    reward[recipe.recipeId] = reward[recipe.recipeId] + CondimentEffect[recipe.condiment];
+                }
+            }
+
+            //技法影响
+            if (rule.SkillEffect) {
+                let SkillEffect = rule.SkillEffect;
+                for (const recipe of recipes) {
+                    let r = recipe.stirfry > 0 ? SkillEffect['stirfry'] : 0;
+                    r = r + (recipe.boil > 0 ? SkillEffect['boil'] : 0);
+                    r = r + (recipe.knife > 0 ? SkillEffect['knife'] : 0);
+                    r = r + (recipe.fry > 0 ? SkillEffect['fry'] : 0);
+                    r = r + (recipe.bake > 0 ? SkillEffect['bake'] : 0);
+                    r = r + (recipe.steam > 0 ? SkillEffect['steam'] : 0);
+                    reward[recipe.recipeId] = reward[recipe.recipeId] + r;
+                }
+            }
+
+            //食材影响
+            if (rule.MaterialsEffect) {
+                let MaterialsEffect = rule.MaterialsEffect;
+                const materialsMap = {};
+                MaterialsEffect.forEach(item => {
+                    materialsMap[item.MaterialID] = item.Effect;
+                });
+                for (const recipe of recipes) {
+                    let materials = recipe.materials
+                    let mReward = 0;
+                    for (const material of materials) {
+                        mReward = mReward +( materialsMap[ material.material] ? materialsMap[ material.material] : 0);
+                    }
+                    reward[recipe.recipeId] = reward[recipe.recipeId] + mReward;
+                }
+            }
+
+            //菜谱星级的影响
+            if (rule.RarityEffect){
+                let RarityEffect = rule.RarityEffect
+                for (const recipe of recipes) {
+                    reward[recipe.recipeId] = reward[recipe.recipeId] + RarityEffect[recipe.rarity];
+                }
+            }
+
             break;
         }
     }
+    console.log(reward)
     return {
         reward,
         materialCount,
