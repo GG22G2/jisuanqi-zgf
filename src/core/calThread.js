@@ -68,24 +68,26 @@ class ChefAndRecipeThread {
                 }
             }
         }
-        maxGroupScore = (0.35 * maxGroupScore);//将最高分的35%作为基准，低于这个的组和不做考虑
+
+       let groupScoreLimit = (0.35 * maxGroupScore);//将最高分的35%作为基准，低于这个的组和不做考虑
 
         for (let i = 0; i < this.scoreAddCacheNoEquip.length; i++) {
             let t = 0;
             let hasBigScore = false;
             for (let s of this.scoreAddCacheNoEquip[i]) {
                 t += s;
-                if (s > maxGroupScore) {
+                if (s > groupScoreLimit) {
                     hasBigScore = true;
                 }
             }
             noCanUseScoreIndex[i] = t === 0 || !hasBigScore;
         }
 
-        console.log(maxGroupScore)
+        console.log(groupScoreLimit)
 
         let topKValueInt = 0, maxScore = 0, maxKey = BigInt(0);
         let score1Index, score2Index, score3Index;
+        let score2Limit = 100000000;
         for (let i = this.start; i < this.limit; i++) {
             const precipes = this.playRecipes[i];
             let cal = 0;
@@ -111,7 +113,7 @@ class ChefAndRecipeThread {
                         continue;
                     }
                     score2 = s1 + this.scoreAddCacheNoEquip[score2Index][playChef[1]]; //计算这个厨师组合中前两个厨师的得分
-                    if (score2 === 0) {
+                    if (score2 === 0 || score2<score2Limit) {
                         i9 = chef2Limit;
                         continue;
                     }
@@ -121,6 +123,8 @@ class ChefAndRecipeThread {
                             cal += score2;
                             if (cal > maxScore) {
                                 maxScore = cal;
+                                score2Limit = maxScore - maxGroupScore; //如果前两个菜达不到这个分数，就没必要计算第三个菜了
+
                                 // i k ,i9   菜谱 i(0-2304)12位，  菜谱排列 k(0-1680)11位，  厨师组合 i2(0-795)12位
                                 //将得分， 菜谱，菜谱排列，厨师组合索引组合成long保存， 得分(cal)在高位，这样新的cal可以用来排序
                                 // 1符号位，20位得分，18位菜谱索引，11位菜谱排列，14位厨师索引

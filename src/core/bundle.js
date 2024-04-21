@@ -251,7 +251,6 @@ class PlayRecipe {
 
 class GodInference {
     constructor(reward, sexReward, materials, calConfig, officialGameData, myGameData) {
-        this.segmentnums = 800;
         this.chefMinRaritySum = 14;
         this.deepLimit = [0, 6, 3, 3, 2, 2, 2, 2, 2, 2];
         this.ownChefs = null;
@@ -387,7 +386,7 @@ class GodInference {
             this.buildCache();
         }
         this.buildPermutation();
-        let start = Date.now() ,end;
+        let start = Date.now(), end;
         const playRecipes2 = new Array(this.playRecipes.length);
         for (let i = 0; i < playRecipes2.length; i++) {
             playRecipes2[i] = new Array(9).fill(0);
@@ -415,11 +414,44 @@ class GodInference {
         let totalP = groupNum * 100;
         let curP = 0;
         let resultCount = 0;
-        this.segmentnums = total / groupNum;
-        let data = JSON.stringify( {playRecipes2,
+        let segmentnums = total / groupNum;
+
+
+        //  2*0.625  1*1.25  1*1.25  1*1.25
+        //如果平均分配，第一个线程的计算时长是其他线程的两倍，剩余线程比较平均，
+        let taskSE = []
+        let calStart =0,calEnd;
+        for (let i = 0; i < groupNum; i++) {
+
+            if (i === 0) {
+                calStart = 0;
+                calEnd = segmentnums * 0.4;
+            } else if (i === groupNum - 1) {
+                calStart = calEnd;
+                calEnd = total;
+            } else {
+                calStart = calEnd;
+                calEnd = calEnd + segmentnums * 1.4;
+            }
+            calEnd = calEnd|0
+            taskSE.push({
+                start:calStart,
+                end:calEnd
+            })
+        }
+
+        console.log(taskSE)
+
+        let data = JSON.stringify({
+            playRecipes2,
             playChefs: this.playChefs,
             recipe2Change: GodInference.recipe2Change,
-            tempCalCache: this.tempCalCache});
+            tempCalCache: this.tempCalCache
+        });
+
+
+        //不同区段的实际计算量是不同的, 计算一般集中的前半部分
+
 
         return new Promise(resolve => {
             for (let i = 0; i < groupNum; i++) {
@@ -450,25 +482,13 @@ class GodInference {
                     }
                 };
                 console.time("start")
-                // JSON.stringify( {playRecipes2,
-                //     playChefs: this.playChefs,
-                //     recipe2Change: GodInference.recipe2Change,
-                //     tempCalCache: this.tempCalCache})
+                let se = taskSE[i];
+                calWorker.postMessage({
+                    start: se.start,
+                    end: se.end,
+                    data: data
+                })
 
-
-                if (i === groupNum - 1) {
-                    calWorker.postMessage({
-                        start: i * this.segmentnums,
-                        end: total,
-                        data:data
-                    })
-                } else {
-                    calWorker.postMessage({
-                        start: i * this.segmentnums,
-                        end: (i + 1) * this.segmentnums,
-                        data:data
-                    })
-                }
                 //calWorker.postMessage(data)
                 console.timeEnd("start")
             }

@@ -152,6 +152,7 @@ class ChefAndRecipeThread {
 
         endtime = /* currentTimeMillis */ Date.now();
         console.info((this.limit - this.start) + "全菜谱 全厨师 无厨具排列结果用时:" + (endtime - starttime) + "ms");
+        console.log(this.start)
         return maxKey;
     }
 
