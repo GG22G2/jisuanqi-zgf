@@ -78,11 +78,11 @@
           <br/>
           游戏数据取自图鉴网
           <br/>
-          计算器只是为了能拿到高保
+          只是为了能拿到高保
           <br/>
-          计算器不考虑厨具，不考虑厨师在场时给其他厨师的加成技能,没有调料和心法盘
+          已考虑：厨师修炼,菜谱专精,自带厨具
           <br/>
-          计算器可以设置额外技法值，已考虑厨师修炼和菜谱专精
+          不考虑厨具，不考虑厨师在场时给其他厨师的加成技能,没有调料和心法盘
           <br/>
         </el-tab-pane>
 
@@ -148,9 +148,6 @@ export default {
         return;
       }
       this.percentage=0;
-
-
-
       let ruleStr = null;
       this.showPercentage =true;
       // 挑选本周规则，还是历史规则
@@ -174,7 +171,9 @@ export default {
         return
       }
       myGameData = JSON.parse(myGameData);
-      return parseData(gameData,myGameData,this.calConfig);
+      return  parseData(gameData,myGameData,this.calConfig);
+
+
     },
     async initRuleSelected() {
       let data = await (await fetch('https://bcjh.xyz/api/get_etc_rule')).json();

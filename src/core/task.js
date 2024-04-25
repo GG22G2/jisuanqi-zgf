@@ -5,7 +5,7 @@ class Task {
 
         let rule = parseRule(officialGameData, ruleStr)
         let TopResult = Task.defaultTask(officialGameData, myGameData, rule, config);
-        // let TopResult = App.testTask(officialGameData, myGameData);
+        //let TopResult = Task.testTask(officialGameData, myGameData);
         return TopResult;
 
         //App.testTask(officialGameData, myGameData);
@@ -20,13 +20,36 @@ class Task {
     }
 
     static testTask(officialGameData, myGameData, calConfig) {
-        const reward = new Array(10000).fill(1);
-        const materialCount = new Array(47).fill(50);
+        const reward = new Array(10000).fill(0);
+        const materialCount = new Array(47).fill(5000);
         let sexReward = new Array(2).fill(0);
-        sexReward = [0, 0.5]
+        sexReward = [0, 0]
         const inference = new GodInference(reward, sexReward, materialCount, calConfig, officialGameData, myGameData);
-        inference.refer();
+        return inference.refer();
     }
+
+    static yanhui(officialGameData, myGameData, calConfig) {
+        //如果计算宴会，计算思路
+        //奖励倍数为0, 食材无线 ，然后按照现有思路算分数，但是三位厨师确定后，走一遍规则
+
+        //所有菜的总意图要合适, 最后总意图等于
+
+        //6个厨师  18到菜， 每个菜的位置不一样都可能影响
+
+        //保证菜谱等级总和 等于意图总和 拿到售价加成
+
+        //再次基础上生成菜谱排列 18道菜谱的排列   ，然后
+
+        // 42 5 5  5  5 5  5 4 4 4
+
+    }
+}
+
+
+function autoxjsTask(topChef) {
+    console.log(topChef)
+
+
 }
 
 
@@ -53,6 +76,7 @@ function parseData(gameData, myGameData, calConfig) {
     officialGameData.materials = gameData.materials;
     officialGameData.recipes = gameData.recipes;
     officialGameData.skills = gameData.skills;
+    officialGameData.ambers  =gameData.ambers
     officialGameData.buildMap();
 
 
@@ -73,9 +97,8 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calCo
     for (let i = 0; i < size; i++) {
         let jsonRecipe = recipes[i];
         let id = jsonRecipe.id;
-
         if (jsonRecipe.got === "是") {
-            let recipe = officialGameData.RecipeHashMap.get(id);
+            let recipe = officialGameData.recipeHashMap.get(id);
             if (recipe != null) {
                 if (jsonRecipe.ex === "是") {
                     recipe.price = recipe.price + recipe.exPrice;
@@ -95,25 +118,64 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calCo
         if (chef != null && jsonChef.got === "是") {
             let delSkill = false;
             if (jsonChef.ult !== "是") {
-                chef.ultimateSkill = null;
+                chef.ult = false
                 delSkill = true;
+            }else {
+                chef.ult = true
             }
-            myGameData.chefs.push(chef);
+            //厨师本身携带了厨具
+            if (jsonChef.equip != null) {
+                let equip = officialGameData.equipHashMap.get(jsonChef.equip);
+                chef.selfEquipSkillIds = equip.skill
+            }
 
-            if (chef.rarity === 5 && calConfig.addBaseValue > 0) {
+            if (jsonChef.ambers!= null){
+                let amberIds = jsonChef.ambers;
+                let amberSkillIds = []
+                for (let j = 0; j <  amberIds.length; j++) {
+                    let amber = officialGameData.amberHashMap.get(amberIds[j]);
+                    if (amber!=null){
+                        //这里直接生成一个技能得了
+                        amberSkillIds= [...amberSkillIds,...amber.skill]
+                    }
+                }
+                let dlv = jsonChef.dlv ? jsonChef.dlv:1; //厨师心法盘等级
+
+
+                chef.amberSkillIds =  amberSkillIds;
+
+                for (let j = 0; j < amberSkillIds.length; j++) {
+                    if (amberSkillIds[j]>0){
+                        let skill = officialGameData.skillHashMap.get(amberSkillIds[j]);
+                        //根据心法盘等级生成一个新的技能
+                        let newSkill = JSON.stringify(JSON.stringify(skill));
+                        let effects = newSkill.effect;
+                        for (let k = 0; k < effects.length; k++) {
+                            let effect = effects[k];
+                            // effect.value +=
+                        }
+
+
+                    }
+                }
+            }
+
+
+            myGameData.chefs.push(chef);
+            if (jsonChef.equip == null && chef.rarity === 5 && calConfig.addBaseValue > 0) {
                 //5星的厨师，在生成一份技法增加60/100的版本
                 let chefIds = generateChefIds(chef, calConfig.addBaseValue);
                 for (let chefId of chefIds) {
                     let chef2 = officialGameData.chefHashMap.get(chefId);
                     if (delSkill) {
-                        chef2.ultimateSkill = null;
+                        chef.ult = false
+                    }else {
+                        chef.ult = true
                     }
                     myGameData.chefs.push(chef2);
                 }
 
             }
-
-
         }
     }
 
@@ -235,9 +297,9 @@ function parseRule(officialGameData, jsonObjectRule) {
                 for (let key in recipeEffect) {
                     reward[key] = recipeEffect[key]
                 }
-            }else {
+            } else {
                 reward = reward.fill(0)
-                console.log('没有奖励倍数',rule)
+                console.log('没有奖励倍数', rule)
             }
 
             //食材数量
@@ -290,14 +352,14 @@ function parseRule(officialGameData, jsonObjectRule) {
                     let materials = recipe.materials
                     let mReward = 0;
                     for (const material of materials) {
-                        mReward = mReward +( materialsMap[ material.material] ? materialsMap[ material.material] : 0);
+                        mReward = mReward + (materialsMap[material.material] ? materialsMap[material.material] : 0);
                     }
                     reward[recipe.recipeId] = reward[recipe.recipeId] + mReward;
                 }
             }
 
             //菜谱星级的影响
-            if (rule.RarityEffect){
+            if (rule.RarityEffect) {
                 let RarityEffect = rule.RarityEffect
                 for (const recipe of recipes) {
                     reward[recipe.recipeId] = reward[recipe.recipeId] + RarityEffect[recipe.rarity];
