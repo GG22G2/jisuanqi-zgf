@@ -172,8 +172,6 @@ export default {
       }
       myGameData = JSON.parse(myGameData);
       return  parseData(gameData,myGameData,this.calConfig);
-
-
     },
     async initRuleSelected() {
       let data = await (await fetch('https://bcjh.xyz/api/get_etc_rule')).json();

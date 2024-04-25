@@ -1,32 +1,76 @@
-import {GodInference, OfficialGameData, MyGameData} from './bundle.js'
+import {GodInference, OfficialGameData, MyGameData, CacheKitchenGodCal} from './bundle.js'
 
 class Task {
     static main(officialGameData, myGameData, ruleStr, config) {
 
         let rule = parseRule(officialGameData, ruleStr)
-        let TopResult = Task.defaultTask(officialGameData, myGameData, rule, config);
+        // let TopResult = Task.defaultTask(officialGameData, myGameData, rule, config);
         //let TopResult = Task.testTask(officialGameData, myGameData);
-        return TopResult;
-
+        // return TopResult;
+        Task.maxGood(officialGameData, myGameData)
         //App.testTask(officialGameData, myGameData);
     }
 
     static defaultTask(officialGameData, myGameData, rule, calConfig) {
-        const reward = rule.reward;
+        const recipeReward = rule.recipeReward;
         const materialCount = rule.materialCount;
         let sexReward = rule.sexReward;
-        const inference = new GodInference(reward, sexReward, materialCount, calConfig, officialGameData, myGameData);
+        const inference = new GodInference(officialGameData, myGameData, recipeReward, sexReward, materialCount);
         return inference.refer();
     }
 
     static testTask(officialGameData, myGameData, calConfig) {
-        const reward = new Array(10000).fill(0);
+        const recipeReward = new Array(10000).fill(0);
         const materialCount = new Array(47).fill(5000);
         let sexReward = new Array(2).fill(0);
         sexReward = [0, 0]
-        const inference = new GodInference(reward, sexReward, materialCount, calConfig, officialGameData, myGameData);
+        const inference = new GodInference(officialGameData, myGameData, null, null, materialCount);
         return inference.refer();
     }
+
+    static maxGood(officialGameData, myGameData, calConfig) {
+
+        const inference = new GodInference(officialGameData, myGameData, null, null, null);
+
+        let kitchenGodCal = new CacheKitchenGodCal(inference.globalAddtion.useall, null, null, 86 / 100);
+
+        let maxV = 0;
+
+        for (const ownChef of inference.ownChefs) {
+            if (ownChef.rarity >= 3) {
+                //console.log(ownChef)
+                for (const ownRecipe of myGameData.recipes) {
+                    if (ownRecipe.rarity >= 2) {
+                        let singlePrice = kitchenGodCal.calSinglePrice(ownChef, ownRecipe)
+                        //console.log(singlePrice)
+                        // console.log(ownRecipe)
+                        let seconds = ownRecipe.time;
+                        let hourPrice = singlePrice * 60 * 60 / seconds;
+                        if (ownRecipe.name==='雪景球蛋糕'){
+                           // console.log(ownChef.name,ownRecipe.name,hourPrice)
+                        }
+                        if (hourPrice>50000){
+                            console.log(ownChef.name,ownRecipe.name,hourPrice)
+
+                            //计算11 或22小时版本采集下，一个小时消耗的食材等效的采集耗时
+
+                        }
+
+
+                        // if (hourPrice > maxV) {
+                        //     maxV = hourPrice;
+                        //     console.log(ownChef.name,ownRecipe.name,hourPrice)
+                        // }
+
+                    }
+                }
+            }
+
+        }
+
+
+    }
+
 
     static yanhui(officialGameData, myGameData, calConfig) {
         //如果计算宴会，计算思路
@@ -76,9 +120,8 @@ function parseData(gameData, myGameData, calConfig) {
     officialGameData.materials = gameData.materials;
     officialGameData.recipes = gameData.recipes;
     officialGameData.skills = gameData.skills;
-    officialGameData.ambers  =gameData.ambers
+    officialGameData.ambers = gameData.ambers
     officialGameData.buildMap();
-
 
     myGameData.equips = [];
 
@@ -120,7 +163,7 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calCo
             if (jsonChef.ult !== "是") {
                 chef.ult = false
                 delSkill = true;
-            }else {
+            } else {
                 chef.ult = true
             }
             //厨师本身携带了厨具
@@ -129,36 +172,36 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calCo
                 chef.selfEquipSkillIds = equip.skill
             }
 
-            if (jsonChef.ambers!= null){
-                let amberIds = jsonChef.ambers;
-                let amberSkillIds = []
-                for (let j = 0; j <  amberIds.length; j++) {
-                    let amber = officialGameData.amberHashMap.get(amberIds[j]);
-                    if (amber!=null){
-                        //这里直接生成一个技能得了
-                        amberSkillIds= [...amberSkillIds,...amber.skill]
-                    }
-                }
-                let dlv = jsonChef.dlv ? jsonChef.dlv:1; //厨师心法盘等级
-
-
-                chef.amberSkillIds =  amberSkillIds;
-
-                for (let j = 0; j < amberSkillIds.length; j++) {
-                    if (amberSkillIds[j]>0){
-                        let skill = officialGameData.skillHashMap.get(amberSkillIds[j]);
-                        //根据心法盘等级生成一个新的技能
-                        let newSkill = JSON.stringify(JSON.stringify(skill));
-                        let effects = newSkill.effect;
-                        for (let k = 0; k < effects.length; k++) {
-                            let effect = effects[k];
-                            // effect.value +=
-                        }
-
-
-                    }
-                }
-            }
+            // if (jsonChef.ambers!= null){
+            //     let amberIds = jsonChef.ambers;
+            //     let amberSkillIds = []
+            //     for (let j = 0; j <  amberIds.length; j++) {
+            //         let amber = officialGameData.amberHashMap.get(amberIds[j]);
+            //         if (amber!=null){
+            //             //这里直接生成一个技能得了
+            //             amberSkillIds= [...amberSkillIds,...amber.skill]
+            //         }
+            //     }
+            //     let dlv = jsonChef.dlv ? jsonChef.dlv:1; //厨师心法盘等级
+            //
+            //
+            //     chef.amberSkillIds =  amberSkillIds;
+            //
+            //     for (let j = 0; j < amberSkillIds.length; j++) {
+            //         if (amberSkillIds[j]>0){
+            //             let skill = officialGameData.skillHashMap.get(amberSkillIds[j]);
+            //             //根据心法盘等级生成一个新的技能
+            //             let newSkill = JSON.stringify(JSON.stringify(skill));
+            //             let effects = newSkill.effect;
+            //             for (let k = 0; k < effects.length; k++) {
+            //                 let effect = effects[k];
+            //                 // effect.value +=
+            //             }
+            //
+            //
+            //         }
+            //     }
+            // }
 
 
             myGameData.chefs.push(chef);
@@ -169,7 +212,7 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calCo
                     let chef2 = officialGameData.chefHashMap.get(chefId);
                     if (delSkill) {
                         chef.ult = false
-                    }else {
+                    } else {
                         chef.ult = true
                     }
                     myGameData.chefs.push(chef2);
@@ -280,7 +323,7 @@ function cloneChef(chef) {
  *
  * */
 function parseRule(officialGameData, jsonObjectRule) {
-    let reward = new Array(10000).fill(-1000)
+    let recipeReward = new Array(10000).fill(-1000)
     let materialCount = new Array(47);
     let sexReward = [0.0, 0.0]
     let recipes = officialGameData.recipes
@@ -295,10 +338,10 @@ function parseRule(officialGameData, jsonObjectRule) {
             if (rule.RecipeEffect) {
                 let recipeEffect = rule.RecipeEffect;
                 for (let key in recipeEffect) {
-                    reward[key] = recipeEffect[key]
+                    recipeReward[key] = recipeEffect[key]
                 }
             } else {
-                reward = reward.fill(0)
+                recipeReward = recipeReward.fill(0)
                 console.log('没有奖励倍数', rule)
             }
 
@@ -323,7 +366,7 @@ function parseRule(officialGameData, jsonObjectRule) {
             if (rule.CondimentEffect) {
                 let CondimentEffect = rule.CondimentEffect;
                 for (const recipe of recipes) {
-                    reward[recipe.recipeId] = reward[recipe.recipeId] + CondimentEffect[recipe.condiment];
+                    recipeReward[recipe.recipeId] = recipeReward[recipe.recipeId] + CondimentEffect[recipe.condiment];
                 }
             }
 
@@ -337,7 +380,7 @@ function parseRule(officialGameData, jsonObjectRule) {
                     r = r + (recipe.fry > 0 ? SkillEffect['fry'] : 0);
                     r = r + (recipe.bake > 0 ? SkillEffect['bake'] : 0);
                     r = r + (recipe.steam > 0 ? SkillEffect['steam'] : 0);
-                    reward[recipe.recipeId] = reward[recipe.recipeId] + r;
+                    recipeReward[recipe.recipeId] = recipeReward[recipe.recipeId] + r;
                 }
             }
 
@@ -354,7 +397,7 @@ function parseRule(officialGameData, jsonObjectRule) {
                     for (const material of materials) {
                         mReward = mReward + (materialsMap[material.material] ? materialsMap[material.material] : 0);
                     }
-                    reward[recipe.recipeId] = reward[recipe.recipeId] + mReward;
+                    recipeReward[recipe.recipeId] = recipeReward[recipe.recipeId] + mReward;
                 }
             }
 
@@ -362,16 +405,16 @@ function parseRule(officialGameData, jsonObjectRule) {
             if (rule.RarityEffect) {
                 let RarityEffect = rule.RarityEffect
                 for (const recipe of recipes) {
-                    reward[recipe.recipeId] = reward[recipe.recipeId] + RarityEffect[recipe.rarity];
+                    recipeReward[recipe.recipeId] = recipeReward[recipe.recipeId] + RarityEffect[recipe.rarity];
                 }
             }
 
             break;
         }
     }
-    console.log(reward)
+    console.log(recipeReward)
     return {
-        reward,
+        recipeReward,
         materialCount,
         sexReward
     }

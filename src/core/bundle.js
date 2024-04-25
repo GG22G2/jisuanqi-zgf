@@ -12,7 +12,11 @@ class CalConfig {
 }
 
 class CacheKitchenGodCal {
-    constructor() {
+    constructor(useAll, recipeReward, sexReward,decorationEffect) {
+        this.base = 1 + ( decorationEffect?decorationEffect:0); //基础倍率和装饰的影响
+        this.recipeReward = recipeReward ? recipeReward : new Array(7000).fill(0);
+        this.sexReward = sexReward ? sexReward : [0, 0];
+        this.useAll = useAll;
         this.qualityAdd = [-1, 0, 0.1, 0.3, 0.5, 1.0];
         this.quality = new Array(2000);
         for (let i = 0; i < 2000; i++) {
@@ -38,9 +42,6 @@ class CacheKitchenGodCal {
     /**
      * 用于计算在没有厨具的情况下，一个菜可以达到的品质
      * <p>
-     * 虽然没有厨具，但考虑厨师可能会有一些技法加成，让本身不能做的菜谱，但如果这个菜得分很高
-     * 厨师带着加上100技法的厨具就可以做，则判定为品质加成为0，
-     * 如果菜谱需要两项技法，而且厨师两项技法都不达标，则直接判定为不能做
      * @param {Chef} chef
      * @param {SkillEffect} effect
      * @param {CalRecipe} recipe
@@ -111,6 +112,70 @@ class CacheKitchenGodCal {
         add += (effect.usecreation * tags[0]) + (effect.usemeat * tags[1]) + (effect.usevegetable * tags[2]) + (effect.usefish * tags[3]);
         return add;
     }
+
+    calSinglePrice(ownChef, ownRecipe,decorationEffect) {
+        let qualityAddS = 0;  //技法加成
+        let skillEffect = ownChef.skillEffect;
+        const rarity = skillEffect.rarity;
+        let qualityAddQ = this.qualityAddNoEquip(ownChef, skillEffect, ownRecipe); //品质加成
+        if (qualityAddQ < 0) {
+            return 0;
+        }
+
+        let sexAdd = 0;
+
+        let tags = ownChef.tags;
+        if (tags != null && tags.length > 0) {
+            for (const sexTag of tags) {
+                if (sexTag <= 2) {
+                    sexAdd += this.sexReward[sexTag - 1];
+                }
+            }
+        }
+
+
+        //根据品质生效的技能
+        if (skillEffect.excessRank.length > 0) {
+            let excessRank = skillEffect.excessRank;
+            for (let j = 0; j < excessRank.length; j++) {
+                let rank = excessRank[j];
+                if (this.qualityAdd[rank[0]] >= qualityAddQ) {
+                    qualityAddS += rank[1];
+                }
+            }
+        }
+
+        //根据份数生效的技能
+        //todo 这个不确定是不是加在这里
+        if (skillEffect.excessCookbookNum.length > 0) {
+            let excessCookbookNumArr = skillEffect.excessCookbookNum;
+            for (let j = 0; j < excessCookbookNumArr.length; j++) {
+                let excessCookbookNum = excessCookbookNumArr[j];
+                let count = excessCookbookNum[0];
+                let value = excessCookbookNum[1];
+                if (count >= ownRecipe.count) {
+                    qualityAddS += value;
+                }
+            }
+        }
+
+        if (skillEffect.fewerCookbookNum.length > 0) {
+            let fewerCookbookNumArr = skillEffect.fewerCookbookNum;
+            for (let j = 0; j < fewerCookbookNumArr.length; j++) {
+                let fewerCookbookNum = fewerCookbookNumArr[j];
+                let count = fewerCookbookNum[0];
+                let value = fewerCookbookNum[1];
+                if (count <= ownRecipe.count) {
+                    qualityAddS += value;
+                }
+            }
+        }
+
+        qualityAddS += this.skillAdd(skillEffect, ownRecipe);
+        let price = ownRecipe.price;
+        return Math.ceil(price * (this.base + this.recipeReward[ownRecipe.recipeId] + sexAdd + qualityAddQ + qualityAddS + this.useAll[ownRecipe.rarity] + rarity[ownRecipe.rarity])) | 0;
+    }
+
 }
 
 
@@ -125,6 +190,7 @@ class GlobalAddition {
         this.manfill = 0;
         this.womanfill = 0;
         this.price = 0;
+        //各个星级菜谱的售价加成
         this.useall = [0, 0, 0, 0, 0, 0];
         this.maxequiplimit = [0, 0, 0, 0, 0, 0];
         this.init(chefs, skills)
@@ -253,7 +319,7 @@ class PlayRecipe {
 }
 
 class GodInference {
-    constructor(reward, sexReward, materials, calConfig, officialGameData, myGameData) {
+    constructor(officialGameData, myGameData, recipeReward, sexReward, materials) {
         this.chefMinRaritySum = 14;
         this.deepLimit = [0, 6, 3, 3, 2, 2, 2, 2, 2, 2];
         this.ownChefs = null;
@@ -271,8 +337,8 @@ class GodInference {
             "面", "菜", "菜", "鱼", "菜", "肉", "肉", "肉", "面", "菜",
             "菜", "鱼", "菜", "面", "面", "菜", "鱼", "肉", "肉", "肉",
             "鱼", "鱼", "肉", "肉", "菜", "菜"];
-        this.reward = reward;
-        this.materials = materials;
+        this.recipeReward = recipeReward;
+        this.materials = materials ? materials : new Array(50).fill(10000);
         this.sexReward = sexReward;
         this.officialGameData = officialGameData;
         this.myGameData = myGameData;
@@ -319,7 +385,7 @@ class GodInference {
     buildCache() {
         this.buildIndex();
         const builder = new TempCalCache.builder();
-        builder.init(this.ownChefs, this.ownRecipes, this.ownEquips, this.officialGameData, this.globalAddtion, this.reward, this.sexReward);
+        builder.init(this.ownChefs, this.ownRecipes, this.ownEquips, this.officialGameData, this.globalAddtion, this.recipeReward, this.sexReward);
         this.tempCalCache = builder.build();
     }
 
@@ -328,12 +394,9 @@ class GodInference {
      * 这里做一重排，用从0开始的连续数字代替id
      */
     buildIndex() {
-        this.recipePermutation(1, ([]), new IngredientLimit(this.materials));
-        //this.playRecipes = this.playRecipes.slice(0, 60);
+        this.recipePermutation(1, [], new IngredientLimit(this.materials));
         console.info("有序菜谱组合数量" + this.playRecipes.length);
-
         const maps = new Map();
-
         let quchong = new Set();
 
         for (let i = 0; i < this.playRecipes.length; i++) {
@@ -354,12 +417,8 @@ class GodInference {
                 }
             }
         }
-
         console.log("菜谱种类", maps.size)
-
         this.compressionAndMapping(maps);
-
-
         this.ownRecipes = new Array(maps.size)
         for (let [key, value] of maps.entries()) {
             this.ownRecipes[value.index] = value
@@ -668,7 +727,7 @@ class GodInference {
     sortOfPrice(quantity, recipes) {
         for (let index132 = 0; index132 < recipes.length; index132++) {
             let ownRecipe = recipes[index132];
-            const rew = this.reward[ownRecipe.recipeId];
+            const rew = this.recipeReward[ownRecipe.recipeId];
             this.prices[ownRecipe.recipeId] = (Math.ceil(ownRecipe.price * (1 + rew) * quantity[ownRecipe.recipeId]) | 0);
         }
         recipes.sort((r1, r2) => {
@@ -706,26 +765,21 @@ class GodInference {
 
     initOwn() {
         const chefs = [];
-        const sort = this.myGameData.chefs.filter((chef) => {
+        this.ownChefs = this.myGameData.chefs.filter((chef) => {
             return chef.rarity >= 2;
         }).sort((chef, chef2) => {
             return chef.chefId - chef2.chefId;
         });
-        this.ownChefs = []
-        sort.forEach((chef) => {
-            this.ownChefs.push(chef);
-        });
-
-        const recipes = this.myGameData.recipes;
-        const recipes1 = new Array(this.myGameData.recipes.length).fill(null)
-        for (let i = 0; i < recipes1.length; i++) {
-            recipes1[i] = recipes[i];
-        }
 
         this.tempOwnRecipes = this.myGameData.recipes;
         for (let tempOwnRecipe of this.tempOwnRecipes) {
             tempOwnRecipe.materials2 = tempOwnRecipe.materials
         }
+
+        for (const ownChef of this.ownChefs) {
+            buildChefSkillEffect(this.officialGameData, ownChef);
+        }
+
 
     }
 }
@@ -1177,9 +1231,8 @@ class TempAddition {
 class TempCalCache {
     constructor(chefIndexMax, recipeIndexMax) {
         this.scoreCache = null;
-        this.scoreCacheNoEquip = null;
-        this.scoreAddCacheNoEquip = null;
-        this.scoreCacheNoEquipIndex = null;
+        this.groupScoreCache = null;
+        this.groupScoreCacheNoIndex = null;
 
         this.chefCount = chefIndexMax;
         this.recipeCount = recipeIndexMax;
@@ -1189,14 +1242,9 @@ class TempCalCache {
             this.scoreCache[i] = new Array(recipeIndexMax).fill(0)
         }
 
-        this.scoreCacheNoEquip = new Array(chefIndexMax);
-        for (let i = 0; i < chefIndexMax; i++) {
-            this.scoreCacheNoEquip[i] = new Array(recipeIndexMax).fill(0)
-        }
-
-        this.scoreCacheNoEquipIndex = new Array(this.recipeCount);
+        this.groupScoreCacheNoIndex = new Array(this.recipeCount);
         for (let i = 0; i < this.recipeCount; i++) {
-            this.scoreCacheNoEquipIndex[i] = new Array(this.recipeCount).fill(0)
+            this.groupScoreCacheNoIndex[i] = new Array(this.recipeCount).fill(0)
         }
     }
 }
@@ -1206,7 +1254,7 @@ class builder {
         if (this.tempCalCache === undefined) {
             this.tempCalCache = null;
         }
-        this.reward = null;
+        this.recipeReward = null;
         this.sexReward = null;
         this.officialGameData = null;
         this.globalAddtion = null;
@@ -1216,14 +1264,13 @@ class builder {
         this.tempEffect = new SkillEffect();
     }
 
-    init(ownChefs, ownRecipes, ownEquips, officialGameData, globalAddtion, reward, sexReward) {
+    init(ownChefs, ownRecipes, ownEquips, officialGameData, globalAddtion, recipeReward, sexReward) {
         this.officialGameData = officialGameData;
         this.globalAddtion = globalAddtion;
-        this.kitchenGodCal = new CacheKitchenGodCal();
+        this.kitchenGodCal = new CacheKitchenGodCal(globalAddtion.useall, recipeReward, sexReward);
         this.ownChefs = ownChefs;
         this.ownRecipes = ownRecipes;
-        this.ownEquips = ownEquips;
-        this.reward = reward;
+        this.recipeReward = recipeReward;
         this.sexReward = sexReward;
         this.tempCalCache = new TempCalCache(ownChefs.length, ownRecipes.length);
     }
@@ -1233,7 +1280,6 @@ class builder {
         for (let i = 0; i < this.ownChefs.length; i++) {
             const ownChef = this.ownChefs[i];
             ownChef.index = i;
-            this.buildEffect$com_example_entity_Chef(ownChef);
         }
     }
 
@@ -1245,82 +1291,13 @@ class builder {
 
     initCache() {
         const scoreCache = this.tempCalCache.scoreCache;
-        const scoreCacheNoEquip = this.tempCalCache.scoreCacheNoEquip;
-
-        let skillEffect;
-        let price;
-        let singlePrice;
-        const rankAdd = [-1, 0, 0.1, 0.3, 0.5, 1.0];
-        const useall = this.globalAddtion.useall;
+        //各个品质对应的加成
         for (let i = 0; i < this.ownChefs.length; i++) {
             const ownChef = this.ownChefs[i];
-            skillEffect = ownChef.skillEffect;
-            const rarity = skillEffect.rarity;
-
             for (let t = 0; t < this.ownRecipes.length; t++) {
-                let qualityAddQ = 0;  //品质加成
-                let qualityAddS = 0;  //技法加成
                 const ownRecipe = this.ownRecipes[t];
                 const index = ownRecipe.index;
-                qualityAddQ = this.kitchenGodCal.qualityAddNoEquip(ownChef, skillEffect, ownRecipe);
-                if (qualityAddQ === -1) {
-                    scoreCacheNoEquip[i][index] = 0;
-                    continue;
-                }
-
-                let tags = ownChef.tags;
-                let sexAdd = 0;
-                if (tags != null && tags.length > 0) {
-                    for (const sexTag of tags) {
-                        if (sexTag <= 2) {
-                            sexAdd += this.sexReward[sexTag - 1];
-                        }
-                    }
-                }
-
-
-                //根据品质生效的技能
-                if (skillEffect.excessRank.length > 0) {
-                    let excessRank = skillEffect.excessRank;
-                    for (let j = 0; j < excessRank.length; j++) {
-                        let rank = excessRank[j];
-                        if (rankAdd[rank[0]] >= qualityAddQ) {
-                            qualityAddS += rank[1];
-                        }
-                    }
-                }
-
-                //根据份数生效的技能
-                //todo 这个不确定是不是加在这里
-                if (skillEffect.excessCookbookNum.length > 0) {
-                    let excessCookbookNumArr = skillEffect.excessCookbookNum;
-                    for (let j = 0; j < excessCookbookNumArr.length; j++) {
-                        let excessCookbookNum = excessCookbookNumArr[j];
-                        let count = excessCookbookNum[0];
-                        let value = excessCookbookNum[1];
-                        if (count >= ownRecipe.count) {
-                            qualityAddS += value;
-                        }
-                    }
-                }
-
-                if (skillEffect.fewerCookbookNum.length > 0) {
-                    let fewerCookbookNumArr = skillEffect.fewerCookbookNum;
-                    for (let j = 0; j < fewerCookbookNumArr.length; j++) {
-                        let fewerCookbookNum = fewerCookbookNumArr[j];
-                        let count = fewerCookbookNum[0];
-                        let value = fewerCookbookNum[1];
-                        if (count <= ownRecipe.count) {
-                            qualityAddS += value;
-                        }
-                    }
-                }
-
-                qualityAddS += this.kitchenGodCal.skillAdd(skillEffect, ownRecipe);
-                price = ownRecipe.price;
-                singlePrice = (Math.ceil(price * (1 + this.reward[ownRecipe.recipeId] + sexAdd + qualityAddQ + qualityAddS + useall[ownRecipe.rarity] + rarity[ownRecipe.rarity])) | 0);
-                scoreCacheNoEquip[i][index] = singlePrice * ownRecipe.count;
-
+                const singlePrice = this.kitchenGodCal.calSinglePrice(ownChef, ownRecipe);
                 scoreCache[i][index] = singlePrice * ownRecipe.count;
             }
         }
@@ -1334,24 +1311,24 @@ class builder {
                 }
             }
         }
-        this.tempCalCache.scoreAddCacheNoEquip = new Array(indexs);
+        this.tempCalCache.groupScoreCache = new Array(indexs);
 
         for (let i = 0; i < indexs; i++) {
-            this.tempCalCache.scoreAddCacheNoEquip[i] = new Array(this.tempCalCache.chefCount).fill(0)
+            this.tempCalCache.groupScoreCache[i] = new Array(this.tempCalCache.chefCount).fill(0)
         }
 
-        const scoreAddCacheNoEquip = this.tempCalCache.scoreAddCacheNoEquip;
-        const scoreCacheNoEquipIndex = this.tempCalCache.scoreCacheNoEquipIndex;
+        const groupScoreCache = this.tempCalCache.groupScoreCache;
+        const groupScoreCacheNoIndex = this.tempCalCache.groupScoreCacheNoIndex;
         for (let t = 0; t < this.tempCalCache.chefCount; t++) {
             let index = 0;
             for (let i = 0; i < length; i++) {
                 for (let j = i + 1; j < length; j++) {
-                    scoreCacheNoEquipIndex[i][j] = index;
+                    groupScoreCacheNoIndex[i][j] = index;
                     for (let k = j + 1; k < length; k++) {
-                        if (scoreCacheNoEquip[t][i] === 0 || scoreCacheNoEquip[t][j] === 0 || scoreCacheNoEquip[t][k] === 0) {
-                            scoreAddCacheNoEquip[index++][t] = 0;
+                        if (scoreCache[t][i] === 0 || scoreCache[t][j] === 0 || scoreCache[t][k] === 0) {
+                            groupScoreCache[index++][t] = 0;
                         } else {
-                            scoreAddCacheNoEquip[index++][t] = scoreCacheNoEquip[t][i] + scoreCacheNoEquip[t][j] + scoreCacheNoEquip[t][k];
+                            groupScoreCache[index++][t] = scoreCache[t][i] + scoreCache[t][j] + scoreCache[t][k];
                         }
                     }
                 }
@@ -1399,18 +1376,35 @@ class builder {
 
         }
     }
+}
 
-    buildEffect$com_example_entity_Chef(chef) {
-        const skillEffect = new SkillEffect();
-        let skill = this.officialGameData.getSkill(chef.skill);
-        let effect = skill.effect;
-        for (let i = 0; i < effect.length; i++) {
-            skillEffect.effect(effect[i], skill);
+
+TempCalCache.builder = builder;
+
+
+function buildChefSkillEffect(officialGameData, chef) {
+    const skillEffect = new SkillEffect();
+    let skill = officialGameData.getSkill(chef.skill);
+    let effect = skill.effect;
+    for (let i = 0; i < effect.length; i++) {
+        skillEffect.effect(effect[i], skill);
+    }
+    //如果没修炼，已经把修炼技能删除掉了
+    if (chef.ult) {
+        const ultimateId = chef.ultimateSkill;
+        skill = officialGameData.getSkill(ultimateId);
+        if (skill != null) {
+            effect = skill.effect;
+            for (let i = 0; i < effect.length; i++) {
+                skillEffect.effect(effect[i], skill);
+            }
         }
-        //如果没修炼，已经把修炼技能删除掉了
-        if (chef.ult) {
-            const ultimateId = chef.ultimateSkill;
-            skill = this.officialGameData.getSkill(ultimateId);
+    }
+
+    const selfEquipSkillIds = chef.selfEquipSkillIds
+    if (selfEquipSkillIds) {
+        for (let i = 0; i < selfEquipSkillIds.length; i++) {
+            skill = officialGameData.getSkill(selfEquipSkillIds[i])
             if (skill != null) {
                 effect = skill.effect;
                 for (let i = 0; i < effect.length; i++) {
@@ -1418,40 +1412,26 @@ class builder {
                 }
             }
         }
-
-        const selfEquipSkillIds = chef.selfEquipSkillIds
-        if (selfEquipSkillIds) {
-            for (let i = 0; i < selfEquipSkillIds.length; i++) {
-                skill = this.officialGameData.getSkill(selfEquipSkillIds[i])
-                if (skill != null) {
-                    effect = skill.effect;
-                    for (let i = 0; i < effect.length; i++) {
-                        skillEffect.effect(effect[i], skill);
-                    }
-                }
-            }
-        }
-
-        const amberSkillIds = chef.amberSkillIds
-        if (amberSkillIds) {
-            for (let i = 0; i < amberSkillIds.length; i++) {
-                skill = this.officialGameData.getSkill(amberSkillIds[i])
-                if (skill != null) {
-                    effect = skill.effect;
-                    for (let i = 0; i < effect.length; i++) {
-                        skillEffect.effect(effect[i], skill);
-                    }
-                }
-            }
-        }
-
-
-        chef.skillEffect = skillEffect;
-        return skillEffect;
     }
+
+    const amberSkillIds = chef.amberSkillIds
+    if (amberSkillIds) {
+        for (let i = 0; i < amberSkillIds.length; i++) {
+            skill = officialGameData.getSkill(amberSkillIds[i])
+            if (skill != null) {
+                effect = skill.effect;
+                for (let i = 0; i < effect.length; i++) {
+                    skillEffect.effect(effect[i], skill);
+                }
+            }
+        }
+    }
+
+
+    chef.skillEffect = skillEffect;
+    return skillEffect;
 }
 
-TempCalCache.builder = builder;
 
 class TopResult {
     constructor(playChefs, recipeIndex, score) {
@@ -1755,4 +1735,4 @@ class Skill {
     }
 }
 
-export {GodInference, OfficialGameData, MyGameData, CalConfig}
+export {GodInference, OfficialGameData, MyGameData, CalConfig,CacheKitchenGodCal}
