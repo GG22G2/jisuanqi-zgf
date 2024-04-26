@@ -4,10 +4,10 @@ class Task {
     static main(officialGameData, myGameData, ruleStr, config) {
 
         let rule = parseRule(officialGameData, ruleStr)
-        // let TopResult = Task.defaultTask(officialGameData, myGameData, rule, config);
+         let TopResult = Task.defaultTask(officialGameData, myGameData, rule, config);
         //let TopResult = Task.testTask(officialGameData, myGameData);
-        // return TopResult;
-        Task.maxGood(officialGameData, myGameData)
+         return TopResult;
+       // Task.maxGood(officialGameData, myGameData)
         //App.testTask(officialGameData, myGameData);
     }
 
