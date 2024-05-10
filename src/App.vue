@@ -4,10 +4,20 @@
       <el-tabs type="card" @tab-click="cardClick">
         <el-tab-pane label="计算器">
           <el-row>
-            <el-text class="mx-1" size="large">额外技法值</el-text>
 
-            <el-input-number :precision="0" :min="0" :max="9999" :controls="false"
-                             v-model="calConfig.addBaseValue"></el-input-number>
+              <el-text class="mx-1" size="large">额外技法值</el-text>
+
+              <el-input-number :precision="0" :min="0" :max="9999" :controls="false"
+                               v-model="calConfig.addBaseValue"></el-input-number>
+
+              <div style="padding-left: 3px"></div>
+
+              <el-text class="mx-1" size="large">过滤比例</el-text>
+
+              <el-input-number :precision="2" :min="0" :max="1" :controls="false"
+                               v-model="calConfig.filterGroupScore"></el-input-number>
+
+
           </el-row>
           <el-row>
             <el-select filterable style="width: 300px" v-model="currentRule" placeholder="请选择厨神计算器">
@@ -106,8 +116,8 @@ export default {
   data() {
     return {
       calConfig: new CalConfig(),
-      percentage:0,
-      showPercentage:false,
+      percentage: 0,
+      showPercentage: false,
       dataCode: '',
       isIndeterminate: true,
       currentRule: '',
@@ -129,14 +139,14 @@ export default {
   },
   created() {
     this.init();
-    window.onmessage=(event)=>{
+    window.onmessage = (event) => {
       this.percentage = Math.round(event.data);
     }
   },
   methods: {
     async calculator() {
-      this.topChefs.length=0;
-      this.topScore=null;
+      this.topChefs.length = 0;
+      this.topScore = null;
       let {officialGameData, myGameData} = await this.loadData();
 
       if (officialGameData == null || myGameData == null) {
@@ -147,17 +157,25 @@ export default {
         })
         return;
       }
-      this.percentage=0;
+      this.percentage = 0;
       let ruleStr = null;
-      this.showPercentage =true;
+      this.showPercentage = true;
       // 挑选本周规则，还是历史规则
       if (this.currentRule === -1) {
         ruleStr = this.curWeekRule;
       } else {
         ruleStr = await (await fetch(`https://bcjh.xyz/api/get_rule?time=${this.currentRule}`)).json();
       }
+
       let topResult = await Task.main(officialGameData, myGameData, ruleStr, this.calConfig);
-      console.log(topResult[0].chefs)
+      if (topResult==null){
+        ElNotification({
+          title: '无法计算',
+          message: '规则不符合预期',
+          type: 'error',
+        })
+      }
+      //console.log(topResult[0].chefs)
       this.topChefs = topResult[0].chefs
       this.topScore = topResult[0].score
     },
@@ -171,25 +189,32 @@ export default {
         return
       }
       myGameData = JSON.parse(myGameData);
-      return  parseData(gameData,myGameData,this.calConfig);
+      return parseData(gameData, myGameData, this.calConfig);
     },
     async initRuleSelected() {
       let data = await (await fetch('https://bcjh.xyz/api/get_etc_rule')).json();
       //如果是周五下午到周日22点，则尝试获取本周的厨神数据
       let curWeekRuleResult = await this.getCurrentWeekRule();
+
       this.ruleList = []
+      let ruleList = this.ruleList;
       if (curWeekRuleResult) {
         this.ruleList.push({
           label: '本周御前',
           value: -1
         })
       }
-      let ruleList = this.ruleList;
+      const regex = /^(\d{1,2}\/\d{1,2}\/\d{1,2})-(\S+)$/;
       for (let item of data) {
-        ruleList.push({
-          label: item.tag,
-          value: item['start_time']
-        })
+        //24/1/26-酸味  以日期开始 -  的格式
+        const match = item.tag.match(regex);
+        if (match != null) {
+          ruleList.push({
+            label: item.tag,
+            value: item['start_time']
+          })
+        }
+
       }
     },
     async getCurrentWeekRule() {

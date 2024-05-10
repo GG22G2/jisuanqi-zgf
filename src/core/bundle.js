@@ -5,13 +5,14 @@ class CalConfig {
     /**
      * 计算配置，暂时只有加法额外追加的值
      * */
-    constructor(addBaseValue) {
-        this.addBaseValue = addBaseValue;
+    constructor(addBaseValue,filterGroupScore) {
+        this.addBaseValue = 0;
+        this.filterGroupScore = 0;
     }
 
 }
 
-class CacheKitchenGodCal {
+class Calculator {
     constructor(useAll, recipeReward, sexReward,decorationEffect) {
         this.base = 1 + ( decorationEffect?decorationEffect:0); //基础倍率和装饰的影响
         this.recipeReward = recipeReward ? recipeReward : new Array(7000).fill(0);
@@ -502,7 +503,7 @@ class GodInference {
             })
         }
 
-        console.log(taskSE)
+        // console.log(taskSE)
 
         let data = JSON.stringify({
             playRecipes2,
@@ -1267,7 +1268,7 @@ class builder {
     init(ownChefs, ownRecipes, ownEquips, officialGameData, globalAddtion, recipeReward, sexReward) {
         this.officialGameData = officialGameData;
         this.globalAddtion = globalAddtion;
-        this.kitchenGodCal = new CacheKitchenGodCal(globalAddtion.useall, recipeReward, sexReward);
+        this.kitchenGodCal = new Calculator(globalAddtion.useall, recipeReward, sexReward);
         this.ownChefs = ownChefs;
         this.ownRecipes = ownRecipes;
         this.recipeReward = recipeReward;
@@ -1546,11 +1547,15 @@ class OfficialGameData {
         this.equips = null;
         this.skills = null;
         this.ambers = null;
+        this.buffs = null;
+        this.intents = null;
         this.equipHashMap = new Map();
         this.skillHashMap = new Map();
         this.chefHashMap = new Map();
         this.recipeHashMap = new Map();
         this.amberHashMap = new Map();
+        this.buffHashMap = new Map();
+        this.intentHashMap = new Map();
     }
 
     buildMap() {
@@ -1573,6 +1578,14 @@ class OfficialGameData {
         for (let i = 0; i < this.ambers.length; i++) {
             let x = this.ambers[i];
             this.amberHashMap.set(x.amberId, x);
+        }
+        for (let i = 0; i < this.buffs.length; i++) {
+            let x = this.buffs[i];
+            this.buffHashMap.set(x.buffId, x);
+        }
+        for (let i = 0; i < this.intents.length; i++) {
+            let x = this.intents[i];
+            this.intentHashMap.set(x.intentId, x);
         }
     }
 
@@ -1735,4 +1748,4 @@ class Skill {
     }
 }
 
-export {GodInference, OfficialGameData, MyGameData, CalConfig,CacheKitchenGodCal}
+export {GodInference, OfficialGameData, MyGameData, CalConfig,Calculator}
