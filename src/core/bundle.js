@@ -474,34 +474,34 @@ class GodInference {
         let maxScoreKey = BigInt(0);
         let works = []
         let that = this;
-        let totalP = groupNum * 100;
+
         let curP = 0;
-        let resultCount = 0;
+
         let segmentnums = total / groupNum;
 
 
         //  2*0.625  1*1.25  1*1.25  1*1.25
         //如果平均分配，第一个线程的计算时长是其他线程的两倍，剩余线程比较平均，
-        let taskSE = []
-        let calStart = 0, calEnd;
-        for (let i = 0; i < groupNum; i++) {
-
-            if (i === 0) {
-                calStart = 0;
-                calEnd = segmentnums * 0.4;
-            } else if (i === groupNum - 1) {
-                calStart = calEnd;
-                calEnd = total;
-            } else {
-                calStart = calEnd;
-                calEnd = calEnd + segmentnums * 1.4;
-            }
-            calEnd = calEnd | 0
-            taskSE.push({
-                start: calStart,
-                end: calEnd
-            })
-        }
+       // let taskSE = []
+       // let calStart = 0, calEnd;
+        // for (let i = 0; i < groupNum; i++) {
+        //
+        //     if (i === 0) {
+        //         calStart = 0;
+        //         calEnd = segmentnums * 0.4;
+        //     } else if (i === groupNum - 1) {
+        //         calStart = calEnd;
+        //         calEnd = total;
+        //     } else {
+        //         calStart = calEnd;
+        //         calEnd = calEnd + segmentnums * 1.4;
+        //     }
+        //     calEnd = calEnd | 0
+        //     taskSE.push({
+        //         start: calStart,
+        //         end: calEnd
+        //     })
+        // }
 
         // console.log(taskSE)
 
@@ -514,7 +514,11 @@ class GodInference {
 
 
         //不同区段的实际计算量是不同的, 计算一般集中的前半部分
+        let startIndex = 0,limit = 300;
+        let sendCount = Math.ceil(total/limit);
+        let resultCount = 0;
 
+        let totalP = sendCount * 100;
 
         return new Promise(resolve => {
             for (let i = 0; i < groupNum; i++) {
@@ -522,16 +526,26 @@ class GodInference {
                 calWorker = new Worker(new URL('./worker.js', import.meta.url))
                 works.push(calWorker)
                 calWorker.onmessage = function (event) {
+
                     if (event.data.type === 'p') {
                         curP += event.data.p;
                         postMessage(curP / totalP * 100)
                     } else {
+                        //计算完成，安排下一个任务
                         const topScoreKey = event.data.maxK;
                         resultCount++;
                         if (topScoreKey > maxScoreKey) {
                             maxScoreKey = topScoreKey;
                         }
-                        if (resultCount === groupNum) {
+
+                        if (  startIndex<total ){
+                            //再安排一组
+                            this.postMessage({start: startIndex,limit:limit})
+                            startIndex = limit;
+                            limit = Math.min(limit +300,total)
+                        }
+
+                        if (startIndex >= total && resultCount === sendCount) {
                             topPlayChefs = that.parseLong(playRecipes2, that.playChefs, maxScoreKey);
                             end = Date.now();
                             console.info("全菜谱 全厨师 无厨具排列结果用时::" + (end - start) + "ms");
@@ -539,27 +553,16 @@ class GodInference {
                             for (let work of works) {
                                 work.terminate();
                             }
-
-                            //生成autoxjs 可用的脚本，自动摆放厨师,但是需要考虑排放顺序
-
-
                             resolve(that.calSecondStage(topPlayChefs));
-
                         }
                     }
                 };
-                console.time("start")
-                let se = taskSE[i];
-                calWorker.postMessage({
-                    start: se.start,
-                    end: se.end,
-                    data: data
-                })
 
-                //calWorker.postMessage(data)
-                console.timeEnd("start")
+                calWorker.postMessage({data: data})
+                calWorker.postMessage({start: startIndex,limit:limit})
+                startIndex = limit;
+                limit =  Math.min(limit + 300,total)
             }
-
         });
     }
 

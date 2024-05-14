@@ -1,20 +1,23 @@
 
+let inited = false;
 
 self.onmessage = (e) => {
     let data = e.data;
-    let chefAndRecipeThread = new ChefAndRecipeThread(data.start, data.end);
-    let temp = JSON.parse(data.data)
-    //console.log(chefAndRecipeThread, data)
-    chefAndRecipeThread.setBaseData(temp.playRecipes2, temp.playChefs, temp.recipe2Change, temp.tempCalCache);
-    let maxK = chefAndRecipeThread.call();
-   // console.log(maxK)
-    self.postMessage({type: 'r', maxK: maxK});
+    if (!inited){
+        let temp = JSON.parse(data.data)
+        chefAndRecipeThread.setBaseData(temp.playRecipes2, temp.playChefs, temp.recipe2Change, temp.tempCalCache);
+        inited=true;
+    }else {
+        let maxK = chefAndRecipeThread.call(data.start,data.limit);
+        // console.log(maxK)
+        self.postMessage({type: 'r', maxK: maxK});
+    }
 };
 
 
 class ChefAndRecipeThread {
 
-    constructor(start, limit) {
+    constructor() {
         this.playRecipes = null;
         this.playChefs = null;
         this.start = 0;
@@ -22,8 +25,8 @@ class ChefAndRecipeThread {
         this.groupScoreCacheNoIndex = null;
         this.groupScoreCache = null;
         this.recipe2Change = null;
-        this.start = start;
-        this.limit = limit;
+        // this.start = start;
+        // this.limit = limit;
     }
 
     static __static_initialize() {
@@ -61,7 +64,7 @@ class ChefAndRecipeThread {
     /**
      * @return {BigInt} 返回得分最高的tomNum个结果，结果是有序的，已经按照得分从高到底排序了
      */
-    call() {
+    call(start,limit) {
         let starttime = Date.now(), endtime = 0;
 
         let playChefs2 = new Array(this.playChefs.length);
@@ -98,8 +101,8 @@ class ChefAndRecipeThread {
         let topKValueInt = 0, maxScore = 0, maxKey = BigInt(0);
         let score1Index, score2Index, score3Index;
         let lastP = 0;
-        for (let i = this.start; i < this.limit; i++) {
-            let p = ((i - this.start) / (this.limit-this.start)) * 100 | 0;
+        for (let i = start; i < limit; i++) {
+            let p = ((i - start) / (limit-start)) * 100 | 0;
             if (p > lastP) {
                 self.postMessage({type: 'p', p: (p - lastP)})
                 lastP = p
@@ -151,7 +154,7 @@ class ChefAndRecipeThread {
         }
 
         endtime = /* currentTimeMillis */ Date.now();
-        console.info((this.limit - this.start) + "全菜谱 全厨师 无厨具排列结果用时:" + (endtime - starttime) + "ms");
+        console.info((limit - start) + "全菜谱 全厨师 无厨具排列结果用时:" + (endtime - starttime) + "ms");
         //console.log(this.start)
         return maxKey;
     }
@@ -193,3 +196,4 @@ ChefAndRecipeThread.disordePermuation_$LI$();
 ChefAndRecipeThread.__static_initialize();
 
 
+let chefAndRecipeThread = new ChefAndRecipeThread();
