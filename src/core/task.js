@@ -1,9 +1,15 @@
-import {GodInference, OfficialGameData, MyGameData, CacheKitchenGodCal} from './bundle.js'
+import {GodInference, OfficialGameData, MyGameData, Calculator} from './bundle.js'
+import {yanhui} from "./fenyunyan.js";
 
 class Task {
     static main(officialGameData, myGameData, ruleStr, config) {
 
         let rule = parseRule(officialGameData, ruleStr)
+        if (rule==null){
+            return null;
+        }
+      //  Task.questParse(officialGameData)
+       // yanhui(officialGameData)
          let TopResult = Task.defaultTask(officialGameData, myGameData, rule, config);
         //let TopResult = Task.testTask(officialGameData, myGameData);
          return TopResult;
@@ -19,6 +25,8 @@ class Task {
         return inference.refer();
     }
 
+
+
     static testTask(officialGameData, myGameData, calConfig) {
         const recipeReward = new Array(10000).fill(0);
         const materialCount = new Array(47).fill(5000);
@@ -28,11 +36,104 @@ class Task {
         return inference.refer();
     }
 
+    static questParse(officialGameData){
+
+        //officialGameData.recipes
+        const recipesNames = new Set(officialGameData.recipes.map(obj => obj.name));
+        const chefsNames = new Set(officialGameData.chefs.map(obj => obj.name));
+        const materialNames = new Set(officialGameData.materials.map(obj => obj.name));
+
+
+        // 烤炸切蒸煮炒是技法，1到5星是菜谱星级， 优特神传是不同稀有度，还有具体的菜谱名称，和厨师名称，单价是指价格，
+        // 请给每个任务用对象描述，包含技法限制，星级要求，稀有度要求，价格要求，食材要求，菜谱要求等，如果某一项没有对应要求，则生成出来的对象中不用体现
+
+
+
+
+        console.log(recipesNames,chefsNames,materialNames)
+        //稀有度
+        let rank = 0;
+        //菜谱星级
+        let rarity = 0;
+        //制作份数
+        let count = 0 ;
+        //材料消耗
+        let materialCount = 0 ;
+        //累计开业时长
+        let time = 0;
+        //是累计开业还是一次性开业
+        let once = false;
+        //所需材料
+        let material = 0;
+        const regex = /\d*份/;
+
+        let fenci = ['制作','使用','和','的','']
+
+        let goals= []
+
+        let quests =  officialGameData.quests;
+        for (let quest of quests) {
+            if (quest.type === '主线任务'){
+                let goal  = quest.goal;
+
+                if (quest.questId<310){
+                    continue
+                }
+               // console.log(goal.match(regex))
+                if (goal.indexOf('提交')!==-1){
+                    //  console.log(quest,goal)
+                } else if (goal.indexOf('探索')!==-1){
+                    //  console.log(quest,goal)
+                } else if (goal.indexOf('拥有')!==-1){
+                  //  console.log(quest,goal)
+                } else if(goal.indexOf('研发')!==-1) {
+                    //  console.log(quest,goal)
+                }  else if(goal.indexOf('遇见')!==-1){
+                    //   console.log(quest,goal)
+                }else if (goal.indexOf('集市')!==-1){
+                    // console.log(quest)
+                } else if (goal.indexOf('升级')!==-1){
+                    //   console.log(quest)
+                }  else if (goal.indexOf('收集')!==-1){
+                   //    console.log(quest,goal)
+                }
+                else if(goal.indexOf('制作使用')!==-1){
+                    goals.push(goal)
+                 //   console.log(quest,goal)
+                } else if(goal.indexOf('制作')!==-1){
+                   //   console.log(quest,goal)
+                    goals.push(goal)
+                }else if (goal.indexOf('使用')!==-1){
+                    goals.push(goal)
+                    // 使用材料xxx个
+                    // 制作 使用xxx的料理 xxx份
+                    // 其他情况
+                    //  console.log(quest,goal)
+                }
+                else if (goal.indexOf('经营')!==-1 || goal.indexOf('开业')!==-1){
+                 //  console.log(quest)
+                }
+                else if (goal.indexOf('获得')!==-1){
+                    //   console.log(quest)
+                }
+
+                else{
+                    console.log('没解析的任务')
+                    console.log(quest,goal)
+                }
+
+            }
+
+        }
+        console.log(goals.slice(0,50))
+        console.log(  JSON.stringify(goals.slice(0,50)))
+    }
+
     static maxGood(officialGameData, myGameData, calConfig) {
 
         const inference = new GodInference(officialGameData, myGameData, null, null, null);
 
-        let kitchenGodCal = new CacheKitchenGodCal(inference.globalAddtion.useall, null, null, 86 / 100);
+        let kitchenGodCal = new Calculator(inference.globalAddtion.useall, null, null, 86 / 100);
 
         let maxV = 0;
 
@@ -71,7 +172,6 @@ class Task {
 
     }
 
-
     static yanhui(officialGameData, myGameData, calConfig) {
         //如果计算宴会，计算思路
         //奖励倍数为0, 食材无线 ，然后按照现有思路算分数，但是三位厨师确定后，走一遍规则
@@ -91,7 +191,7 @@ class Task {
 
         //打印effectType
         let intents = officialGameData.intents;
-
+        let buffs = officialGameData.buffs;
         let et = new Set();
         for (const intent of intents) {
             et.add(intent.effectType)
@@ -103,7 +203,7 @@ class Task {
                     break;
                 case 'PriceChangePercent':
                     //本道料理售价 加或者减百分比
-                   // console.log(intent)
+                    // console.log(intent)
                     break;
                 case 'BasicPriceChangePercent':
                     //本道料理基础售价增加百分比  比如 +100%
@@ -123,7 +223,7 @@ class Task {
                     break;
                 case 'CreateBuff':
                     //创建全局buffer  buffer一般是下一阶段或者两阶段  符合条件的都加百分比售价
-                    //console.log(intent)
+                  //  console.log(intent)
                     break;
                 case 'SetSatietyValue':
                     //修改某个符合条件的菜谱的饱腹感为固定值
@@ -133,6 +233,7 @@ class Task {
         }
 
 
+
         let et2 = new Set();
         for (const intent of intents) {
             et2.add(intent.conditionType)
@@ -140,15 +241,15 @@ class Task {
             switch (intent.conditionType) {
                 case 'CookSkill':
                     //菜谱 有某种技法
-                   // console.log(intent)
+                    // console.log(intent)
                     break;
                 case 'CondimentSkill':
                     //菜谱 有某个口味
-                     //console.log(intent)
+                    //console.log(intent)
                     break;
                 case 'Order':
                     //1/2/3 某个位置生效
-                   // console.log(intent)
+                    // console.log(intent)
                     break;
                 case 'Rarity':
                     //菜谱星级匹配  这个是完全匹配  匹配3星则只有3星菜可以
@@ -172,8 +273,6 @@ class Task {
         //计算18个菜谱位置，每一个位置的最优总奖励倍数
 
 
-
-
         /**
          * 规则梳理:
          *      一共两组，每组三个阶段，每个阶段一个厨师做三个菜，菜谱和厨师公用
@@ -185,22 +284,66 @@ class Task {
          *
          * */
 
+
+
         /**
          *
          * 模拟跟据规则上菜
-         *  就是计算最有的
-         *
+         * 就是计算最有的
          * 先不上菜谱:
          *          判断是否有意图生效次数加一的
-         *
-         *          判断是否有buff ，buffer能对多个菜起作用，效果还是不错的
-         *
-         *
+         *          判断是否有buff ，buff能对多个菜起作用，效果还是不错的
          *          选择高价菜，跟据意图的生效规则，选择技法，口味和星级等
          *          如果有意图生肖次数加1的，的大概率这个位置是主要得分来源，需要放主要菜谱或者围绕这个位置组和
          *          统计匹配规则，生成符合条件的菜谱
          *
          * */
+
+        let intentId  =[[173, 184, 195, 35], [214, 223, 233, 240], [157, 145, 35, 273]]
+
+
+        let intentHashMap = officialGameData.intentHashMap;
+        for (const id of intentId[0]) {
+            let intent = intentHashMap.get(id);
+
+                //console.log(intent.effectType)
+                switch (intent.effectType) {
+                    case 'IntentAdd':
+                        //本道料理意图生效次数加一  如果这个菜谱有多个生效意图，就是这些意图每一个就增加一次
+                        //console.log(intent)
+                        break;
+                    case 'PriceChangePercent':
+                        //本道料理售价 加或者减百分比
+                        // console.log(intent)
+                        break;
+                    case 'BasicPriceChangePercent':
+                        //本道料理基础售价增加百分比  比如 +100%
+                        //console.log(intent)
+                        break;
+                    case 'CreateIntent':
+                        //创建一个新的intent，则个intent是作用于下一道料理的(暂时不知道能不能跨阶段)
+                        //   console.log(intent)
+                        break;
+                    case 'BasicPriceChange':
+                        //基础售价增加   比如+100
+                        //console.log(intent)
+                        break;
+                    case 'CreateBuff':
+                        //创建全局buffer  buffer一般是下一阶段或者两阶段  符合条件的都加百分比售价
+                        //  console.log(intent)
+                        break;
+                }
+
+
+
+        }
+
+        //区分加成位和非加成位 ， 高分菜应该放置到能获得加成的位置上，
+        // 非加成位用筛选条件代替(比如x星，x品质，x口味，x技法，几号位)， 后续只需要从符合条件的里边选最优解就行
+
+
+        //挑选
+
 
     }
 }
@@ -208,8 +351,6 @@ class Task {
 
 function autoxjsTask(topChef) {
     console.log(topChef)
-
-
 }
 
 
@@ -237,8 +378,11 @@ function parseData(gameData, myGameData, calConfig) {
     officialGameData.recipes = gameData.recipes;
     officialGameData.skills = gameData.skills;
     officialGameData.ambers = gameData.ambers
-    officialGameData.intents = gameData.intents
+    officialGameData.quests = gameData.quests
     officialGameData.buffs = gameData.buffs
+    officialGameData.intents = gameData.intents
+
+
     officialGameData.buildMap();
 
     myGameData.equips = [];
@@ -446,12 +590,12 @@ function parseRule(officialGameData, jsonObjectRule) {
     let sexReward = [0.0, 0.0]
     let recipes = officialGameData.recipes
 
-
+    let hasMatchRule = false;
     const rules = jsonObjectRule.rules;
     for (let i = 0; i < rules.length; i++) {
         let rule = rules[i];
         if (rule.Title != null && rule.Title.indexOf('御前') !== -1) {
-
+            hasMatchRule = true;
             //奖励倍数
             if (rule.RecipeEffect) {
                 let recipeEffect = rule.RecipeEffect;
@@ -530,7 +674,11 @@ function parseRule(officialGameData, jsonObjectRule) {
             break;
         }
     }
-    console.log(recipeReward)
+    if (!hasMatchRule){
+        return null
+    }
+
+    //console.log(recipeReward)
     return {
         recipeReward,
         materialCount,
