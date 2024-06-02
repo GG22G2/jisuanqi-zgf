@@ -1,0 +1,2 @@
+先上传到主分支
+git subtree push --prefix dist origin gh-pages
