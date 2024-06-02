@@ -5,17 +5,17 @@
         <el-tab-pane label="计算器">
           <el-row>
 
-              <el-text class="mx-1" size="large">额外技法值</el-text>
+<!--              <el-text class="mx-1" size="large">额外技法值</el-text>-->
 
-              <el-input-number :precision="0" :min="0" :max="9999" :controls="false"
-                               v-model="calConfig.addBaseValue"></el-input-number>
+<!--              <el-input-number :precision="0" :min="0" :max="9999" :controls="false"-->
+<!--                               v-model="calConfig.addBaseValue"></el-input-number>-->
 
-              <div style="padding-left: 3px"></div>
+<!--              <div style="padding-left: 3px"></div>-->
 
-              <el-text class="mx-1" size="large">过滤比例</el-text>
+<!--              <el-text class="mx-1" size="large">过滤比例</el-text>-->
 
-              <el-input-number :precision="2" :min="0" :max="1" :controls="false"
-                               v-model="calConfig.filterGroupScore"></el-input-number>
+<!--              <el-input-number :precision="2" :min="0" :max="1" :controls="false"-->
+<!--                               v-model="calConfig.filterGroupScore"></el-input-number>-->
 
 
           </el-row>

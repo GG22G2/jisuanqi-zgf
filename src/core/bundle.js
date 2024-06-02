@@ -429,7 +429,7 @@ class GodInference {
     buildIndex() {
         this.recipePermutation(1, [], new IngredientLimit(this.materials));
         console.info("有序菜谱组合数量" + this.playRecipes.length);
-        this.tempTest();
+       // this.tempTest();
         const maps = new Map();
         let quchong = new Set();
 
