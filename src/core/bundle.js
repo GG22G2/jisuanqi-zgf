@@ -322,7 +322,7 @@ class PlayRecipe {
 class GodInference {
     constructor(officialGameData, myGameData, recipeReward, sexReward, materials) {
         this.chefMinRaritySum = 14;
-        this.deepLimit = [0, 6, 3, 3, 2, 2, 2, 2, 2, 2];
+        this.deepLimit = [0, 4, 3, 3, 2, 2, 2, 2, 2, 2];
         this.ownChefs = null;
         this.ownRecipes = null;
         this.ownEquips = null;
@@ -390,6 +390,38 @@ class GodInference {
         this.tempCalCache = builder.build();
     }
 
+
+
+    tempTest(){
+        console.log(this.playRecipes)
+
+        for (const recipes of this.playRecipes) {
+
+            for (const recipe of recipes) {
+                let t = recipe.recipe;
+
+                //bake boil  fry  knife steam stirfy
+                console.log(t)
+
+                //厨师组要是看能不能做，  做的等级， 厨师技法的加成，  优先等级然后是技法
+
+                // 按照技法聚类，按照调料聚类 ，
+                // 第一个菜放第一个组， 然后后续菜谱有任意相同技法的就可以放入同一个
+
+                //挑选第二个菜放入，优先有相同技法，没有相同技法则看
+
+            }
+
+
+        }
+        //统计这9个菜谱，
+
+
+
+    }
+
+
+
     /**
      * 有的菜谱id过于大，正常id小于1000，后厨的普遍5000多，如果用一维数组存菜谱id，则有很多空间浪费
      * 这里做一重排，用从0开始的连续数字代替id
@@ -397,6 +429,7 @@ class GodInference {
     buildIndex() {
         this.recipePermutation(1, [], new IngredientLimit(this.materials));
         console.info("有序菜谱组合数量" + this.playRecipes.length);
+        this.tempTest();
         const maps = new Map();
         let quchong = new Set();
 
@@ -446,9 +479,15 @@ class GodInference {
      */
     refer() {
         if (this.tempCalCache == null) {
+            console.time('构建缓存')
             this.buildCache();
+            console.timeEnd('构建缓存')
         }
+
+        console.time('构建厨师组合')
         this.buildPermutation();
+        console.timeEnd('构建厨师组合')
+
         let start = Date.now(), end;
         const playRecipes2 = new Array(this.playRecipes.length);
         for (let i = 0; i < playRecipes2.length; i++) {
@@ -480,38 +519,14 @@ class GodInference {
         let segmentnums = total / groupNum;
 
 
-        //  2*0.625  1*1.25  1*1.25  1*1.25
-        //如果平均分配，第一个线程的计算时长是其他线程的两倍，剩余线程比较平均，
-       // let taskSE = []
-       // let calStart = 0, calEnd;
-        // for (let i = 0; i < groupNum; i++) {
-        //
-        //     if (i === 0) {
-        //         calStart = 0;
-        //         calEnd = segmentnums * 0.4;
-        //     } else if (i === groupNum - 1) {
-        //         calStart = calEnd;
-        //         calEnd = total;
-        //     } else {
-        //         calStart = calEnd;
-        //         calEnd = calEnd + segmentnums * 1.4;
-        //     }
-        //     calEnd = calEnd | 0
-        //     taskSE.push({
-        //         start: calStart,
-        //         end: calEnd
-        //     })
-        // }
-
-        // console.log(taskSE)
-
+        console.time('序列化传递的数据')
         let data = JSON.stringify({
             playRecipes2,
             playChefs: this.playChefs,
             recipe2Change: GodInference.recipe2Change,
             tempCalCache: this.tempCalCache
         });
-
+        console.timeEnd('序列化传递的数据')
 
         //不同区段的实际计算量是不同的, 计算一般集中的前半部分
         let startIndex = 0,limit = 300;
@@ -548,7 +563,7 @@ class GodInference {
                         if (startIndex >= total && resultCount === sendCount) {
                             topPlayChefs = that.parseLong(playRecipes2, that.playChefs, maxScoreKey);
                             end = Date.now();
-                            console.info("全菜谱 全厨师 无厨具排列结果用时::" + (end - start) + "ms");
+                            console.info("排列结果用时::" + (end - start) + "ms");
                             postMessage(100)
                             for (let work of works) {
                                 work.terminate();
@@ -682,12 +697,23 @@ class GodInference {
         return result;
     }
 
+
+    /**
+     * 生成候选的菜谱序列 9个菜谱
+     *
+     * @param index 菜谱序号1-9 代表1到9号位
+     * @param play 9个菜谱的集合
+     * @param ingredientLimit 剩余食材
+     *
+     * */
     recipePermutation(index, play, ingredientLimit) {
         if (index === 10) {
             this.playRecipes.push(play);
             return;
         }
+
         const limit = this.deepLimit[index];
+
         const finalMaterialCount = ingredientLimit.getFinalMaterialCount();
         const integerIntegerMap = this.calQuantity(finalMaterialCount);
         this.sortOfPrice(integerIntegerMap, this.tempOwnRecipes);
@@ -707,9 +733,10 @@ class GodInference {
             this.recipePermutation(index + 1, newplay, ingredientLimit);
             ingredientLimit.setMaterialCount(clone);
         }
+
         for (let it = 0; it < removes.length; it++) {
             this.tempOwnRecipes.push(removes[it]);
-        }
+        }1
     }
 
     /**

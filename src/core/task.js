@@ -393,8 +393,36 @@ function parseData(gameData, myGameData, calConfig) {
     }
 }
 
+
+/**
+ * @param allChef 全厨师，并且全修炼
+ * @param allRecipe 全菜谱并且全专精
+ * */
+function  modifyMyData(foodGameData,allChef,allRecipe){
+
+    if (allRecipe){
+        let recipes = foodGameData.recipes;
+        for (const recipe of recipes) {
+            recipe.ex = '是'
+            recipe.got = '是'
+        }
+    }
+
+    if (allChef){
+        let chefs = foodGameData.chefs;
+        for (const chef of chefs) {
+            chef.got = '是'
+            chef.ult = '是'
+        }
+    }
+
+
+}
+
+
 //从图鉴网导入数据
 function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calConfig) {
+    // modifyMyData(foodGameData,true,true)
     let myGameData = new MyGameData();
     let recipes = foodGameData.recipes;
     let size = recipes.length;

@@ -119,6 +119,11 @@ class ChefAndRecipeThread {
                 if (noCanUseScoreIndex[score1Index] || noCanUseScoreIndex[score2Index] || noCanUseScoreIndex[score3Index]) {
                     continue;
                 }
+
+                //到这里三个才已经确定了，现在只需要找这3个菜对应的厨师就好了
+
+
+
                 let chef3RecipeScore = this.groupScoreCache[score3Index];
 
                 for (let j = 0, i9 = 0, score2 = 0, chef2Limit; j < this.recipe2Change.length; j++) {

@@ -163,7 +163,6 @@ function yanhui(officialGameData, myGameData, calConfig) {
     //4个意图全部触发，那么触发顺序有
 
 
-
     let intentHashMap = officialGameData.intentHashMap;
 
     //先生成意图的生效顺序，   再往里边填菜  ， 最后再放厨师
