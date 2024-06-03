@@ -7,9 +7,13 @@ class CalConfig {
     /**
      * 计算配置，暂时只有加法额外追加的值
      * */
-    constructor(addBaseValue, filterGroupScore) {
-        this.addBaseValue = 0;
-        this.filterGroupScore = 0;
+    constructor(deepLimit, chefMinRaritySum,useEquip,useAll) {
+
+        this.deepLimit = deepLimit;   //生成菜谱时候的遍历深度
+        this.chefMinRaritySum = chefMinRaritySum;    //上场3个厨师的星级和
+        this.useEquip = useEquip;//使用厨具  带实现
+        this.useAll = useAll;//拥有全厨师全修炼，全菜谱全专精
+
     }
 
 }
@@ -322,10 +326,15 @@ class PlayRecipe {
 }
 
 class GodInference {
-    constructor(officialGameData, myGameData, recipeReward, sexReward, materials) {
-        this.chefMinRaritySum = 14;
-        // this.deepLimit = [0, 4, 3, 3, 2, 2, 2, 2, 2, 2];
-        this.deepLimit = [0, 6, 4, 3, 2, 2, 2, 2, 2, 2];
+    constructor(officialGameData, myGameData, recipeReward, sexReward, materials,calConfig) {
+        this.useEquip = false;
+        if (calConfig!=null){
+            this.chefMinRaritySum = calConfig.chefMinRaritySum;
+            this.deepLimit = calConfig.deepLimit;
+            this.useEquip = calConfig.useEquip;
+        }
+
+
         this.ownChefs = null;
         this.ownRecipes = null;
         this.ownEquips = null;
@@ -350,6 +359,13 @@ class GodInference {
         this.initOwn();
         GodInference.modifyChefValue(this.ownChefs, this.globalAddtion);
         this.buildRecipeTags();
+
+
+        if (this.useEquip){
+         //todo 带实现，如果使用厨具，则把厨师按照出局数量，扩充计算
+
+        }
+
     }
 
     /**
@@ -479,6 +495,7 @@ class GodInference {
      */
     refer() {
         let start = Date.now(), end;
+
         if (this.tempCalCache == null) {
             console.time('构建缓存')
             this.buildCache();
@@ -565,7 +582,7 @@ class GodInference {
                         if (startIndex >= total && resultCount === sendCount) {
                             topPlayChefs = that.parseLong(playRecipes2, maxScoreResult);
                             end = Date.now();
-                            console.info("总用时::" + (end - start) + "ms");
+                            console.info("总用时 " + (end - start) + "ms");
                             postMessage(100)
                             for (let work of works) {
                                 work.terminate();
@@ -1403,20 +1420,12 @@ class builder {
 
         this.tempCalCache.groupMaxScore = new Int32Array(indexs * 3);
         this.tempCalCache.groupMaxScoreChefIndex = new Int32Array(indexs * 3);
-
-
         const groupScoreCacheNoIndex = this.tempCalCache.groupScoreCacheNoIndex;
-
-
         const groupMaxScore =   this.tempCalCache.groupMaxScore
         const groupMaxScoreChefIndex =   this.tempCalCache.groupMaxScoreChefIndex
 
-
         console.time("计算菜谱组合最高3个得分")
         let index = 0;
-
-
-
         for (let i = 0; i < length; i++) {
             for (let j = i + 1; j < length; j++) {
                 groupScoreCacheNoIndex[i][j] = index / 3;

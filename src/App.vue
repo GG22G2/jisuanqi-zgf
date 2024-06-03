@@ -5,17 +5,17 @@
         <el-tab-pane label="计算器">
           <el-row>
 
-<!--              <el-text class="mx-1" size="large">额外技法值</el-text>-->
+            <!--              <el-text class="mx-1" size="large">额外技法值</el-text>-->
 
-<!--              <el-input-number :precision="0" :min="0" :max="9999" :controls="false"-->
-<!--                               v-model="calConfig.addBaseValue"></el-input-number>-->
+            <!--              <el-input-number :precision="0" :min="0" :max="9999" :controls="false"-->
+            <!--                               v-model="calConfig.addBaseValue"></el-input-number>-->
 
-<!--              <div style="padding-left: 3px"></div>-->
+            <!--              <div style="padding-left: 3px"></div>-->
 
-<!--              <el-text class="mx-1" size="large">过滤比例</el-text>-->
+            <!--              <el-text class="mx-1" size="large">过滤比例</el-text>-->
 
-<!--              <el-input-number :precision="2" :min="0" :max="1" :controls="false"-->
-<!--                               v-model="calConfig.filterGroupScore"></el-input-number>-->
+            <!--              <el-input-number :precision="2" :min="0" :max="1" :controls="false"-->
+            <!--                               v-model="calConfig.filterGroupScore"></el-input-number>-->
 
 
           </el-row>
@@ -115,7 +115,7 @@ import {parseData, Task} from './core/task.js'
 export default {
   data() {
     return {
-      calConfig: new CalConfig(),
+      calConfig: new CalConfig([0, 5, 3, 3, 2, 2, 2, 2, 2, 2], 14, false, false),
       percentage: 0,
       showPercentage: false,
       dataCode: '',
@@ -165,21 +165,38 @@ export default {
       if (this.currentRule === -1) {
         ruleStr = this.curWeekRule;
       } else {
-        ruleStr = await (await fetch(`https://bcjh.xyz/api/get_rule?time=${this.currentRule}`)).json();
+        ruleStr = await this.getRule(this.currentRule);
       }
       console.log('获取成功')
 
       let topResult = await Task.main(officialGameData, myGameData, ruleStr, this.calConfig);
-      if (topResult==null){
+      if (topResult == null) {
         ElNotification({
           title: '无法计算',
           message: '规则不符合预期',
           type: 'error',
         })
+        this.deleteRule(this.currentRule);
       }
+      //讲规则缓存起来，下次服用
+
+
       //console.log(topResult[0].chefs)
       this.topChefs = topResult[0].chefs
       this.topScore = topResult[0].score
+    },
+
+    async getRule(ruleTime) {
+      let oldRule = localStorage.getItem(ruleTime);
+      if (oldRule) {
+        return JSON.parse(oldRule);
+      }
+      let ruleStr = await (await fetch(`https://bcjh.xyz/api/get_rule?time=${ruleTime}`)).json();
+      localStorage.setItem(ruleTime, JSON.stringify(ruleStr));
+      return ruleStr;
+    },
+    async deleteRule(ruleTime) {
+      localStorage.removeItem(ruleTime);
     },
     async init() {
       await this.initRuleSelected();

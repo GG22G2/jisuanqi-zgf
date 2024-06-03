@@ -21,7 +21,7 @@ class Task {
         const recipeReward = rule.recipeReward;
         const materialCount = rule.materialCount;
         let sexReward = rule.sexReward;
-        const inference = new GodInference(officialGameData, myGameData, recipeReward, sexReward, materialCount);
+        const inference = new GodInference(officialGameData, myGameData, recipeReward, sexReward, materialCount,calConfig);
         return inference.refer();
     }
 
@@ -422,7 +422,12 @@ function  modifyMyData(foodGameData,allChef,allRecipe){
 
 //从图鉴网导入数据
 function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calConfig) {
-    // modifyMyData(foodGameData,true,true)
+
+    if (calConfig.useAll){
+        modifyMyData(foodGameData,true,true)
+    }
+
+
     let myGameData = new MyGameData();
     let recipes = foodGameData.recipes;
     let size = recipes.length;

@@ -91,15 +91,15 @@ class ChefAndRecipeThread {
                 score2Index = this.groupScoreCacheNoIndex[precipes[ints[3]]][precipes[ints[4]]] + (precipes[ints[5]] - precipes[ints[4]] - 1);
                 score3Index = this.groupScoreCacheNoIndex[precipes[ints[6]]][precipes[ints[7]]] + (precipes[ints[8]] - precipes[ints[7]] - 1);
 
-                score1Index  =score1Index *3;
-                score2Index  =score2Index *3;
-                score3Index  =score3Index *3;
+                score1Index = score1Index * 3;
+                score2Index = score2Index * 3;
+                score3Index = score3Index * 3;
 
                 let score = this.groupMaxScore[score1Index] + this.groupMaxScore[score2Index] + this.groupMaxScore[score3Index];
 
-
+                //当前菜谱组合的最大的分，这个分数可能存在厨师冲突，但这个分数都比maxScore小，剩下的肯定更小
                 if (score > maxScore) {
-                    //如果最大分数冲突，则遍历所有，确定最大分
+                    //如果最大分数的厨师冲突，则遍历所有，确定最大分
                     let chef1 = this.groupMaxScoreChefIndex[score1Index]
                     let chef2 = this.groupMaxScoreChefIndex[score2Index]
                     let chef3 = this.groupMaxScoreChefIndex[score3Index]
@@ -112,14 +112,14 @@ class ChefAndRecipeThread {
                         result.permuation = ints;
                     } else {
                         //有某个厨师重复出现，则便利所有可能
-                        for (let j = 0; j < 3; j++) {
-                            for (let l = 0; l < 3; l++) {
-                                for (let m = 0; m < 3; m++) {
-                                    score = this.groupMaxScore[score1Index+j] + this.groupMaxScore[score2Index+l] + this.groupMaxScore[score3Index+m];
+                        for (let c1 = 0; c1 < 3; c1++) {
+                            for (let c2 = 0; c2 < 3; c2++) {
+                                for (let c3 = 0; c3 < 3; c3++) {
+                                    score = this.groupMaxScore[score1Index + c1] + this.groupMaxScore[score2Index + c2] + this.groupMaxScore[score3Index + c3];
                                     //如果最大分数冲突，则遍历所有确定最大分
-                                    chef1 = this.groupMaxScoreChefIndex[score1Index+j]
-                                    chef2 = this.groupMaxScoreChefIndex[score2Index+l]
-                                    chef3 = this.groupMaxScoreChefIndex[score3Index+m]
+                                    chef1 = this.groupMaxScoreChefIndex[score1Index + c1]
+                                    chef2 = this.groupMaxScoreChefIndex[score2Index + c2]
+                                    chef3 = this.groupMaxScoreChefIndex[score3Index + c3]
                                     if (score > maxScore) {
                                         //console.log("全遍历得到最大分")
                                         if (chef1 !== chef2 && chef1 !== chef3 && chef2 !== chef3) {
@@ -139,7 +139,7 @@ class ChefAndRecipeThread {
             }
         }
 
-        endTime =  Date.now();
+        endTime = Date.now();
         console.info((limit - start) + "组数据计算用时:" + (endTime - startTime) + "ms");
 
         return result;
