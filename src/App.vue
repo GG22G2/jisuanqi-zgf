@@ -167,7 +167,7 @@ export default {
       } else {
         ruleStr = await (await fetch(`https://bcjh.xyz/api/get_rule?time=${this.currentRule}`)).json();
       }
-      console.log('规则成功')
+      console.log('获取成功')
 
       let topResult = await Task.main(officialGameData, myGameData, ruleStr, this.calConfig);
       if (topResult==null){
