@@ -161,11 +161,13 @@ export default {
       let ruleStr = null;
       this.showPercentage = true;
       // 挑选本周规则，还是历史规则
+      console.log('获取厨神规则...')
       if (this.currentRule === -1) {
         ruleStr = this.curWeekRule;
       } else {
         ruleStr = await (await fetch(`https://bcjh.xyz/api/get_rule?time=${this.currentRule}`)).json();
       }
+      console.log('规则成功')
 
       let topResult = await Task.main(officialGameData, myGameData, ruleStr, this.calConfig);
       if (topResult==null){

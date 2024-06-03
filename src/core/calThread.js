@@ -6,7 +6,7 @@ class ChefAndRecipeThread {
         this.start = 0;
         this.scoreCache = null;
         this.groupScoreCacheNoIndex = null;
-        this.groupScoreCache = null;
+        this.groupMaxScore = null;
         this.recipe2Change = null;
         this.start = start;
         this.limit = limit;
@@ -42,7 +42,7 @@ class ChefAndRecipeThread {
         this.playChefs = playChefs;
         this.scoreCache = tempCalCache.scoreCacheNoEquip;
         this.groupScoreCacheNoIndex = tempCalCache.groupScoreCacheNoIndex;
-        this.groupScoreCache = tempCalCache.groupScoreCache;
+        this.groupMaxScore = tempCalCache.groupMaxScore;
         this.recipe2Change = recipe2Change;
     }
 
@@ -58,11 +58,11 @@ class ChefAndRecipeThread {
             postMessage((i/playChefs2.length * 100)+"%")
         }
 
-        let noCanUseScoreIndex = new Array(this.groupScoreCache.length).fill(false);
+        let noCanUseScoreIndex = new Array(this.groupMaxScore.length).fill(false);
         //获取所有组合中最高的一组分数
         let maxGroupScore = 0;
-        for (let i = 0; i < this.groupScoreCache.length; i++) {
-            for (let s of this.groupScoreCache[i]) {
+        for (let i = 0; i < this.groupMaxScore.length; i++) {
+            for (let s of this.groupMaxScore[i]) {
                 if (s > maxGroupScore) {
                     maxGroupScore = s;
                 }
@@ -71,10 +71,10 @@ class ChefAndRecipeThread {
 
        let groupScoreLimit = (0.35 * maxGroupScore);//将最高分的35%作为基准，低于这个的组和不做考虑
 
-        for (let i = 0; i < this.groupScoreCache.length; i++) {
+        for (let i = 0; i < this.groupMaxScore.length; i++) {
             let t = 0;
             let hasBigScore = false;
-            for (let s of this.groupScoreCache[i]) {
+            for (let s of this.groupMaxScore[i]) {
                 t += s;
                 if (s > groupScoreLimit) {
                     hasBigScore = true;
@@ -101,18 +101,18 @@ class ChefAndRecipeThread {
                 if (noCanUseScoreIndex[score1Index] || noCanUseScoreIndex[score2Index] || noCanUseScoreIndex[score3Index]) {
                     continue;
                 }
-                let chef3RecipeScore = this.groupScoreCache[score3Index];
+                let chef3RecipeScore = this.groupMaxScore[score3Index];
 
                 for (let j = 0, i9 = 0, score2 = 0, chef2Limit; j < this.recipe2Change.length; j++) {
                     chef2Limit = this.recipe2Change[j];
                     let playChef = this.playChefs[i9]; //获取一个厨师组合
 
-                    let s1 = this.groupScoreCache[score1Index][playChef[0]];
+                    let s1 = this.groupMaxScore[score1Index][playChef[0]];
                     if (s1 === 0) {
                         i9 = chef2Limit;
                         continue;
                     }
-                    score2 = s1 + this.groupScoreCache[score2Index][playChef[1]]; //计算这个厨师组合中前两个厨师的得分
+                    score2 = s1 + this.groupMaxScore[score2Index][playChef[1]]; //计算这个厨师组合中前两个厨师的得分
                     if (score2 === 0 || score2<score2Limit) {
                         i9 = chef2Limit;
                         continue;

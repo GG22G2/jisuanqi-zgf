@@ -1,16 +1,15 @@
-
 let inited = false;
 
 self.onmessage = (e) => {
     let data = e.data;
-    if (!inited){
-        let temp = JSON.parse(data.data)
-        chefAndRecipeThread.setBaseData(temp.playRecipes2, temp.playChefs, temp.recipe2Change, temp.tempCalCache);
-        inited=true;
-    }else {
-        let maxK = chefAndRecipeThread.call(data.start,data.limit);
-        // console.log(maxK)
-        self.postMessage({type: 'r', maxK: maxK});
+    if (!inited) {
+        let temp = data.data
+        //console.log(temp)
+        chefAndRecipeThread.setBaseData(temp.playRecipes2, temp.tempCalCache);
+        inited = true;
+    } else {
+        let result = chefAndRecipeThread.call(data.start, data.limit);
+        self.postMessage({type: 'r', result: result});
     }
 };
 
@@ -19,14 +18,11 @@ class ChefAndRecipeThread {
 
     constructor() {
         this.playRecipes = null;
-        this.playChefs = null;
         this.start = 0;
-        this.scoreCache = null;
         this.groupScoreCacheNoIndex = null;
-        this.groupScoreCache = null;
-        this.recipe2Change = null;
-        // this.start = start;
-        // this.limit = limit;
+        this.groupMaxScore = null;
+        this.groupMaxScoreChefIndex = null;
+
     }
 
     static __static_initialize() {
@@ -52,57 +48,36 @@ class ChefAndRecipeThread {
         ChefAndRecipeThread.permute(needPermuation, [0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0], 0);
     }
 
-    setBaseData(playRecipes, playChefs, recipe2Change, tempCalCache) {
+    setBaseData(playRecipes, tempCalCache) {
         this.playRecipes = playRecipes;
-        this.playChefs = playChefs;
-        this.scoreCache = tempCalCache.scoreCacheNoEquip;
         this.groupScoreCacheNoIndex = tempCalCache.groupScoreCacheNoIndex;
-        this.groupScoreCache = tempCalCache.groupScoreCache;
-        this.recipe2Change = recipe2Change;
+        this.groupMaxScore = tempCalCache.groupMaxScore;
+        this.groupMaxScoreChefIndex = tempCalCache.groupMaxScoreChefIndex;
+        //console.log(tempCalCache)
     }
 
+
     /**
-     * @return {BigInt} 返回得分最高的tomNum个结果，结果是有序的，已经按照得分从高到底排序了
+     * @return {} 返回得分最高的tomNum个结果，结果是有序的，已经按照得分从高到底排序了
      */
-    call(start,limit) {
-        let starttime = Date.now(), endtime = 0;
+    call(start, limit) {
+        let startTime = Date.now(), endTime = 0;
 
-        let playChefs2 = new Array(this.playChefs.length);
-        for (let i = 0; i < playChefs2.length; i++) {
-            playChefs2[i] = this.playChefs[i][2];
-        }
-
-        let noCanUseScoreIndex = new Array(this.groupScoreCache.length).fill(false);
-        //获取所有组合中最高的一组分数
-        let maxGroupScore = 0;
-        for (let i = 0; i < this.groupScoreCache.length; i++) {
-            for (let s of this.groupScoreCache[i]) {
-                if (s > maxGroupScore) {
-                    maxGroupScore = s;
-                }
-            }
-        }
-        maxGroupScore = (0.35 * maxGroupScore);//将最高分的35%作为基准，低于这个的组和不做考虑
-
-        for (let i = 0; i < this.groupScoreCache.length; i++) {
-            let t = 0;
-            let hasBigScore = false;
-            for (let s of this.groupScoreCache[i]) {
-                t += s;
-                if (s > maxGroupScore) {
-                    hasBigScore = true;
-                }
-            }
-            noCanUseScoreIndex[i] = t === 0 || !hasBigScore;
-        }
-
-        //console.log(maxGroupScore)
-
-        let topKValueInt = 0, maxScore = 0, maxKey = BigInt(0);
+        let maxScore = 0, maxKey = 0;
         let score1Index, score2Index, score3Index;
+        let maxScoreChefGroup = new Array(3), maxI, maxK;
         let lastP = 0;
+
+        let result = {
+            maxScore: 0,
+            maxScoreChefGroup: maxScoreChefGroup,
+            recipes: null,
+            permuation: null,
+        }
+
+
         for (let i = start; i < limit; i++) {
-            let p = ((i - start) / (limit-start)) * 100 | 0;
+            let p = ((i - start) / (limit - start)) * 100 | 0;
             if (p > lastP) {
                 self.postMessage({type: 'p', p: (p - lastP)})
                 lastP = p
@@ -116,52 +91,58 @@ class ChefAndRecipeThread {
                 score2Index = this.groupScoreCacheNoIndex[precipes[ints[3]]][precipes[ints[4]]] + (precipes[ints[5]] - precipes[ints[4]] - 1);
                 score3Index = this.groupScoreCacheNoIndex[precipes[ints[6]]][precipes[ints[7]]] + (precipes[ints[8]] - precipes[ints[7]] - 1);
 
-                if (noCanUseScoreIndex[score1Index] || noCanUseScoreIndex[score2Index] || noCanUseScoreIndex[score3Index]) {
-                    continue;
-                }
+                score1Index  =score1Index *3;
+                score2Index  =score2Index *3;
+                score3Index  =score3Index *3;
 
-                //到这里三个才已经确定了，现在只需要找这3个菜对应的厨师就好了
+                let score = this.groupMaxScore[score1Index] + this.groupMaxScore[score2Index] + this.groupMaxScore[score3Index];
 
 
+                if (score > maxScore) {
+                    //如果最大分数冲突，则遍历所有，确定最大分
+                    let chef1 = this.groupMaxScoreChefIndex[score1Index]
+                    let chef2 = this.groupMaxScoreChefIndex[score2Index]
+                    let chef3 = this.groupMaxScoreChefIndex[score3Index]
 
-                let chef3RecipeScore = this.groupScoreCache[score3Index];
-
-                for (let j = 0, i9 = 0, score2 = 0, chef2Limit; j < this.recipe2Change.length; j++) {
-                    chef2Limit = this.recipe2Change[j];
-                    let playChef = this.playChefs[i9]; //获取一个厨师组合
-
-                    let s1 = this.groupScoreCache[score1Index][playChef[0]];
-                    if (s1 === 0) {
-                        i9 = chef2Limit;
-                        continue;
-                    }
-                    score2 = s1 + this.groupScoreCache[score2Index][playChef[1]]; //计算这个厨师组合中前两个厨师的得分
-                    if (score2 === 0) {
-                        i9 = chef2Limit;
-                        continue;
-                    }
-                    for (let score3Limit = Math.max(topKValueInt - score2, 0); i9 < chef2Limit; i9++) {
-                        cal = chef3RecipeScore[playChefs2[i9]];
-                        if (cal > score3Limit) {
-                            cal += score2;
-                            if (cal > maxScore) {
-                                maxScore = cal;
-                                // i k ,i9   菜谱 i(0-2304)12位，  菜谱排列 k(0-1680)11位，  厨师组合 i2(0-795)12位
-                                //将得分， 菜谱，菜谱排列，厨师组合索引组合成long保存， 得分(cal)在高位，这样新的cal可以用来排序
-                                // 1符号位，20位得分，18位菜谱索引，11位菜谱排列，14位厨师索引
-                                let bigCal = BigInt(cal);
-                                maxKey = ((((bigCal << 18n | BigInt(i)) << 11n) | BigInt(k)) << 14n) | BigInt(i9);
+                    if (chef1 !== chef2 && chef1 !== chef3 && chef2 !== chef3) {
+                        maxScore = score;
+                        result.maxScore = maxScore;
+                        result.maxScoreChefGroup = [chef1, chef2, chef3];
+                        result.recipes = precipes;
+                        result.permuation = ints;
+                    } else {
+                        //有某个厨师重复出现，则便利所有可能
+                        for (let j = 0; j < 3; j++) {
+                            for (let l = 0; l < 3; l++) {
+                                for (let m = 0; m < 3; m++) {
+                                    score = this.groupMaxScore[score1Index+j] + this.groupMaxScore[score2Index+l] + this.groupMaxScore[score3Index+m];
+                                    //如果最大分数冲突，则遍历所有确定最大分
+                                    chef1 = this.groupMaxScoreChefIndex[score1Index+j]
+                                    chef2 = this.groupMaxScoreChefIndex[score2Index+l]
+                                    chef3 = this.groupMaxScoreChefIndex[score3Index+m]
+                                    if (score > maxScore) {
+                                        //console.log("全遍历得到最大分")
+                                        if (chef1 !== chef2 && chef1 !== chef3 && chef2 !== chef3) {
+                                            maxScore = score;
+                                            result.maxScore = maxScore;
+                                            result.maxScoreChefGroup = [chef1, chef2, chef3];
+                                            result.recipes = precipes;
+                                            result.permuation = ints;
+                                        }
+                                    }
+                                }
                             }
                         }
+
                     }
                 }
             }
         }
 
-        endtime = /* currentTimeMillis */ Date.now();
-        console.info((limit - start) + "全菜谱 全厨师 无厨具排列结果用时:" + (endtime - starttime) + "ms");
-        //console.log(this.start)
-        return maxKey;
+        endTime =  Date.now();
+        console.info((limit - start) + "组数据计算用时:" + (endTime - startTime) + "ms");
+
+        return result;
     }
 
 
@@ -183,6 +164,8 @@ class ChefAndRecipeThread {
             count[j]--;
         }
     }
+
+
 }
 
 ChefAndRecipeThread.__static_initialized = false;

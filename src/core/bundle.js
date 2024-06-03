@@ -1,11 +1,13 @@
 /* Generated from Java with JSweet 3.0.0 - http://www.jsweet.org */
 import {ChefAndRecipeThread} from "./calThread.js";
 
+import PriorityQueue from 'js-priority-queue';
+
 class CalConfig {
     /**
      * 计算配置，暂时只有加法额外追加的值
      * */
-    constructor(addBaseValue,filterGroupScore) {
+    constructor(addBaseValue, filterGroupScore) {
         this.addBaseValue = 0;
         this.filterGroupScore = 0;
     }
@@ -13,8 +15,8 @@ class CalConfig {
 }
 
 class Calculator {
-    constructor(useAll, recipeReward, sexReward,decorationEffect) {
-        this.base = 1 + ( decorationEffect?decorationEffect:0); //基础倍率和装饰的影响
+    constructor(useAll, recipeReward, sexReward, decorationEffect) {
+        this.base = 1 + (decorationEffect ? decorationEffect : 0); //基础倍率和装饰的影响
         this.recipeReward = recipeReward ? recipeReward : new Array(7000).fill(0);
         this.sexReward = sexReward ? sexReward : [0, 0];
         this.useAll = useAll;
@@ -114,7 +116,7 @@ class Calculator {
         return add;
     }
 
-    calSinglePrice(ownChef, ownRecipe,decorationEffect) {
+    calSinglePrice(ownChef, ownRecipe, decorationEffect) {
         let qualityAddS = 0;  //技法加成
         let skillEffect = ownChef.skillEffect;
         const rarity = skillEffect.rarity;
@@ -322,7 +324,8 @@ class PlayRecipe {
 class GodInference {
     constructor(officialGameData, myGameData, recipeReward, sexReward, materials) {
         this.chefMinRaritySum = 14;
-        this.deepLimit = [0, 4, 3, 3, 2, 2, 2, 2, 2, 2];
+        // this.deepLimit = [0, 4, 3, 3, 2, 2, 2, 2, 2, 2];
+        this.deepLimit = [0, 6, 4, 3, 2, 2, 2, 2, 2, 2];
         this.ownChefs = null;
         this.ownRecipes = null;
         this.ownEquips = null;
@@ -391,8 +394,7 @@ class GodInference {
     }
 
 
-
-    tempTest(){
+    tempTest() {
         console.log(this.playRecipes)
 
         for (const recipes of this.playRecipes) {
@@ -417,9 +419,7 @@ class GodInference {
         //统计这9个菜谱，
 
 
-
     }
-
 
 
     /**
@@ -428,8 +428,8 @@ class GodInference {
      */
     buildIndex() {
         this.recipePermutation(1, [], new IngredientLimit(this.materials));
-        console.info("有序菜谱组合数量" + this.playRecipes.length);
-       // this.tempTest();
+        console.info("候选菜谱列表" + this.playRecipes.length);
+        // this.tempTest();
         const maps = new Map();
         let quchong = new Set();
 
@@ -478,17 +478,14 @@ class GodInference {
      * 假设: 在没有厨具的情况下得分最高的，在带上厨具后仍然是最高的  虽然不一定，但很可能是一个比较优质的解
      */
     refer() {
+        let start = Date.now(), end;
         if (this.tempCalCache == null) {
             console.time('构建缓存')
             this.buildCache();
             console.timeEnd('构建缓存')
         }
 
-        console.time('构建厨师组合')
-        this.buildPermutation();
-        console.timeEnd('构建厨师组合')
 
-        let start = Date.now(), end;
         const playRecipes2 = new Array(this.playRecipes.length);
         for (let i = 0; i < playRecipes2.length; i++) {
             playRecipes2[i] = new Array(9).fill(0);
@@ -509,28 +506,30 @@ class GodInference {
 
         let topPlayChefs = [];
         let total = this.playRecipes.length;
-        let groupNum = 4; //线程数
+        let groupNum = 1; //线程数
         let maxScoreKey = BigInt(0);
+        let maxScoreResult;
         let works = []
         let that = this;
 
         let curP = 0;
 
-        let segmentnums = total / groupNum;
 
 
-        console.time('序列化传递的数据')
-        let data = JSON.stringify({
+        let data = {
             playRecipes2,
-            playChefs: this.playChefs,
-            recipe2Change: GodInference.recipe2Change,
-            tempCalCache: this.tempCalCache
-        });
-        console.timeEnd('序列化传递的数据')
+            tempCalCache: {
+                groupScoreCacheNoIndex: this.tempCalCache.groupScoreCacheNoIndex,
+                groupMaxScore: this.tempCalCache.groupMaxScore,
+                groupMaxScoreChefIndex: this.tempCalCache.groupMaxScoreChefIndex
+            }
+        }
+
+
 
         //不同区段的实际计算量是不同的, 计算一般集中的前半部分
-        let startIndex = 0,limit = 300;
-        let sendCount = Math.ceil(total/limit);
+        let startIndex = 0, limit = Math.min(300000, total);
+        let sendCount = Math.ceil(total / limit);
         let resultCount = 0;
 
         let totalP = sendCount * 100;
@@ -547,23 +546,26 @@ class GodInference {
                         postMessage(curP / totalP * 100)
                     } else {
                         //计算完成，安排下一个任务
-                        const topScoreKey = event.data.maxK;
+                        const topScoreKey = event.data.result.maxScore;
+
+
                         resultCount++;
                         if (topScoreKey > maxScoreKey) {
                             maxScoreKey = topScoreKey;
+                            maxScoreResult = event.data.result;
                         }
 
-                        if (  startIndex<total ){
+                        if (startIndex < total) {
                             //再安排一组
-                            this.postMessage({start: startIndex,limit:limit})
+                            this.postMessage({start: startIndex, limit: limit})
                             startIndex = limit;
-                            limit = Math.min(limit +300,total)
+                            limit = Math.min(limit + 300, total)
                         }
 
                         if (startIndex >= total && resultCount === sendCount) {
-                            topPlayChefs = that.parseLong(playRecipes2, that.playChefs, maxScoreKey);
+                            topPlayChefs = that.parseLong(playRecipes2, maxScoreResult);
                             end = Date.now();
-                            console.info("排列结果用时::" + (end - start) + "ms");
+                            console.info("总用时::" + (end - start) + "ms");
                             postMessage(100)
                             for (let work of works) {
                                 work.terminate();
@@ -574,9 +576,9 @@ class GodInference {
                 };
 
                 calWorker.postMessage({data: data})
-                calWorker.postMessage({start: startIndex,limit:limit})
+                calWorker.postMessage({start: startIndex, limit: limit})
                 startIndex = limit;
-                limit =  Math.min(limit + 300,total)
+                limit = Math.min(limit + 300, total)
             }
         });
     }
@@ -586,25 +588,16 @@ class GodInference {
      * 保存得分 菜谱，菜谱排列，厨师组合索引   1符号位，20位得分，18位菜谱索引，11位菜谱排列，14位厨师索引
      * cal = ((((cal << 18 | i) << 11) | k) << 14) | i2;
      * @param {int[][]} playRecipes
-     * @param {int[][]} playChefs
      * @param {BigInt} socres
      * @return {TopResult[]}
      */
-    parseLong(playRecipes, playChefs, scoreKey) {
-        const disordePermuation = ChefAndRecipeThread.disordePermuation_$LI$();
-        const topResults = ([]);
-        let recipeIndex = 0;
-        let permuteIndex = 0;
-        let chefIndex = 0;
+    parseLong(playRecipes, maxScoreResult) {
         let score = 0;
-
-        recipeIndex = (scoreKey >> 25n & 262143n);
-        permuteIndex = (scoreKey >> 14n & 2047n);
-        chefIndex = (scoreKey & 16383n);
-        score = ((scoreKey & -17592186044416n) >> 43n);
-        const precipes = playRecipes[recipeIndex];
-        const ints = disordePermuation[permuteIndex];
+        score = maxScoreResult.maxScore;
+        const precipes = maxScoreResult.recipes;
+        const ints = maxScoreResult.permuation;
         const recipes = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+
         recipes[0] = precipes[ints[0]];
         recipes[1] = precipes[ints[1]];
         recipes[2] = precipes[ints[2]];
@@ -614,8 +607,11 @@ class GodInference {
         recipes[6] = precipes[ints[6]];
         recipes[7] = precipes[ints[7]];
         recipes[8] = precipes[ints[8]];
-        const chefs = playChefs[chefIndex];
+
+        const chefs = maxScoreResult.maxScoreChefGroup;
+
         const topResult = new TopResult(chefs, recipes, score);
+
         /* add */
 
         return topResult;
@@ -626,7 +622,7 @@ class GodInference {
      * @param {TopResult} topPlayChef
      */
     calSecondStage(topPlayChef) {
-        console.log(topPlayChef.score)
+
         let chefIds = topPlayChef.chefs;
         let recipeIds = topPlayChef.recepeids;
         let result = []
@@ -657,12 +653,6 @@ class GodInference {
         }
 
         return [result]
-    }
-
-    buildPermutation() {
-        this.playChefs = null;
-        this.playChefs = this.chefsPermutation();
-        console.info("厨师组合数" + this.playChefs.length);
     }
 
     chefsPermutation() {
@@ -736,7 +726,7 @@ class GodInference {
 
         for (let it = 0; it < removes.length; it++) {
             this.tempOwnRecipes.push(removes[it]);
-        }1
+        }
     }
 
     /**
@@ -1262,8 +1252,9 @@ class TempAddition {
 class TempCalCache {
     constructor(chefIndexMax, recipeIndexMax) {
         this.scoreCache = null;
-        this.groupScoreCache = null;
-        this.groupScoreCacheNoIndex = null;
+        this.groupMaxScore = null;
+        this.groupMaxScoreChefIndex = null;
+        this.groupScoreCacheNoIndex = null; //二维数组，   一组菜谱3个，这个是前两个菜谱的索引,
 
         this.chefCount = chefIndexMax;
         this.recipeCount = recipeIndexMax;
@@ -1279,6 +1270,71 @@ class TempCalCache {
         }
     }
 }
+
+class MinHeap {
+    constructor(maxCount) {
+        this.heap = [];
+        this.maxCount = maxCount
+    }
+
+    insert(key, value) {
+        this.heap.push({key, value});
+        this.bubbleUp();
+        if (this.heap.length > this.maxCount) {
+            this.remove();
+        }
+    }
+
+    bubbleUp() {
+        let index = this.heap.length - 1;
+        while (index > 0) {
+            let element = this.heap[index];
+            let parentIndex = Math.floor((index - 1) / 2);
+            let parent = this.heap[parentIndex];
+
+            if (parent.key <= element.key) break;
+
+            this.heap[index] = parent;
+            this.heap[parentIndex] = element;
+            index = parentIndex;
+        }
+    }
+
+    remove() {
+        if (this.heap.length <= 1) {
+            return this.heap.pop();
+        }
+        const removedElement = this.heap[0];
+        this.heap[0] = this.heap.pop();
+        this.sinkDown(0);
+        return removedElement;
+    }
+
+    sinkDown(index) {
+        let leftChildIdx, rightChildIdx, minIdx;
+        const length = this.heap.length;
+        const element = this.heap[index];
+
+        while (true) {
+            leftChildIdx = 2 * index + 1;
+            rightChildIdx = 2 * index + 2;
+            minIdx = index;
+
+            if (leftChildIdx < length && this.heap[leftChildIdx].key < this.heap[minIdx].key) {
+                minIdx = leftChildIdx;
+            }
+            if (rightChildIdx < length && this.heap[rightChildIdx].key < this.heap[minIdx].key) {
+                minIdx = rightChildIdx;
+            }
+            if (minIdx === index) break;
+
+            this.heap[index] = this.heap[minIdx];
+            this.heap[minIdx] = element;
+            index = minIdx;
+        }
+    }
+}
+
 
 class builder {
     constructor() {
@@ -1342,30 +1398,80 @@ class builder {
                 }
             }
         }
-        this.tempCalCache.groupScoreCache = new Array(indexs);
+        console.log(`菜谱组合 ${indexs}`)
+        const len = 3;
 
-        for (let i = 0; i < indexs; i++) {
-            this.tempCalCache.groupScoreCache[i] = new Array(this.tempCalCache.chefCount).fill(0)
-        }
+        this.tempCalCache.groupMaxScore = new Int32Array(indexs * 3);
+        this.tempCalCache.groupMaxScoreChefIndex = new Int32Array(indexs * 3);
 
-        const groupScoreCache = this.tempCalCache.groupScoreCache;
+
         const groupScoreCacheNoIndex = this.tempCalCache.groupScoreCacheNoIndex;
-        for (let t = 0; t < this.tempCalCache.chefCount; t++) {
-            let index = 0;
-            for (let i = 0; i < length; i++) {
-                for (let j = i + 1; j < length; j++) {
-                    groupScoreCacheNoIndex[i][j] = index;
-                    for (let k = j + 1; k < length; k++) {
-                        if (scoreCache[t][i] === 0 || scoreCache[t][j] === 0 || scoreCache[t][k] === 0) {
-                            groupScoreCache[index++][t] = 0;
-                        } else {
-                            groupScoreCache[index++][t] = scoreCache[t][i] + scoreCache[t][j] + scoreCache[t][k];
+
+
+        const groupMaxScore =   this.tempCalCache.groupMaxScore
+        const groupMaxScoreChefIndex =   this.tempCalCache.groupMaxScoreChefIndex
+
+
+        console.time("计算菜谱组合最高3个得分")
+        let index = 0;
+
+
+
+        for (let i = 0; i < length; i++) {
+            for (let j = i + 1; j < length; j++) {
+                groupScoreCacheNoIndex[i][j] = index / 3;
+                for (let k = j + 1; k < length; k++) {
+                    //每一组菜谱组合，计算得分最高的五个厨师
+                    let a = 0, b = 0, c = 0, ai = 0, bi = 0, ci = 0;
+
+                    //todo 这里计算最大值的时候，是否可以把厨具也考虑进去？
+                    //todo 厨师最大值，厨师带各种厨具的最大值
+                    //todo 厨师带各种遗玉的最大值
+                    for (let t = 0; t < this.tempCalCache.chefCount; t++) {
+                        let num = 0;
+                        //这里改成计算每组菜谱组合小的最大
+                        if (!(scoreCache[t][i] === 0 || scoreCache[t][j] === 0 || scoreCache[t][k] === 0)) {
+                            num = scoreCache[t][i] + scoreCache[t][j] + scoreCache[t][k];
                         }
+
+                        if (num > a) {
+                            c = b;
+                            ci = bi;
+                            b = a;
+                            bi = ai;
+                            a = num;
+                            ai = t;
+                        } else if (num > b) {
+                            c = b;
+                            ci = bi;
+                            b = num;
+                            bi = t;
+                        } else if (num > c) {
+                            c = num;
+                            ci = t;
+                        }
+
                     }
+
+                    groupMaxScoreChefIndex[index] = ai;
+                    groupMaxScoreChefIndex[index+1] = bi;
+                    groupMaxScoreChefIndex[index+2] = ci;
+
+                    groupMaxScore[index] = a
+                    groupMaxScore[index+1] = b
+                    groupMaxScore[index+2] = c
+
+                    index = index + 3;
                 }
             }
         }
+        console.timeEnd("计算菜谱组合最高3个得分")
+        //console.log(groupMaxScore)
+       // console.log(groupMaxScoreChefIndex)
+
     }
+
+
 
     validEffectParseIsOk() {
         //验证一遍所有数据的技能效果是否都被考虑到了
@@ -1778,4 +1884,4 @@ class Skill {
     }
 }
 
-export {GodInference, OfficialGameData, MyGameData, CalConfig,Calculator}
+export {GodInference, OfficialGameData, MyGameData, CalConfig, Calculator}

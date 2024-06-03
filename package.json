@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "element-plus": "^2.6.2",
+    "js-priority-queue": "^0.1.5",
     "vue": "^3.4.21"
   },
   "devDependencies": {
