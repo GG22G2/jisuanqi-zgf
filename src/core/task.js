@@ -1,5 +1,5 @@
 import {GodInference, OfficialGameData, MyGameData, Calculator} from './bundle.js'
-import {yanhui} from "./fenyunyan.js";
+
 
 class Task {
     static main(officialGameData, myGameData, ruleStr, config) {
@@ -637,8 +637,9 @@ function parseRule(officialGameData, jsonObjectRule) {
                 }
             } else {
                 recipeReward = recipeReward.fill(0)
-                console.log('没有奖励倍数', rule)
+                //console.log('没有奖励倍数', rule)
             }
+            console.log(rule.PassLine[0])
 
             //食材数量
             if (rule.MaterialsLimit instanceof Object) {

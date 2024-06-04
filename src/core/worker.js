@@ -2,15 +2,13 @@ let inited = false;
 
 self.onmessage = (e) => {
     let data = e.data;
-    if (!inited) {
-        let temp = data.data
-        //console.log(temp)
-        chefAndRecipeThread.setBaseData(temp.playRecipes2, temp.tempCalCache);
-        inited = true;
-    } else {
-        let result = chefAndRecipeThread.call(data.start, data.limit);
-        self.postMessage({type: 'r', result: result});
-    }
+
+    chefAndRecipeThread.setBaseData(data.data);
+
+
+    let result = chefAndRecipeThread.call(data.start, data.limit);
+    self.postMessage({type: 'r', result: result});
+
 };
 
 
@@ -19,41 +17,24 @@ class ChefAndRecipeThread {
     constructor() {
         this.playRecipes = null;
         this.start = 0;
-        this.groupScoreCacheNoIndex = null;
+        this.groupRecipeIndex = null;
         this.groupMaxScore = null;
         this.groupMaxScoreChefIndex = null;
 
     }
 
-    static __static_initialize() {
-        if (!ChefAndRecipeThread.__static_initialized) {
-            ChefAndRecipeThread.__static_initialized = true;
-            ChefAndRecipeThread.__static_initializer_0();
-        }
-    }
 
-    static disordePermuation_$LI$() {
-        ChefAndRecipeThread.__static_initialize();
-        if (ChefAndRecipeThread.disordePermuation == null) {
-            ChefAndRecipeThread.disordePermuation = new Array(1680);
-            for (let i = 0; i < 1680; i++) {
-                ChefAndRecipeThread.disordePermuation[i] = new Array(9).fill(0);
-            }
-        }
-        return ChefAndRecipeThread.disordePermuation;
-    }
 
-    static __static_initializer_0() {
-        const needPermuation = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-        ChefAndRecipeThread.permute(needPermuation, [0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0], 0);
-    }
+    setBaseData({playRecipes2,recipePL , scoreCache, recipeCount, chefCount} ) {
+        this.playRecipes = playRecipes2;
 
-    setBaseData(playRecipes, tempCalCache) {
-        this.playRecipes = playRecipes;
-        this.groupScoreCacheNoIndex = tempCalCache.groupScoreCacheNoIndex;
-        this.groupMaxScore = tempCalCache.groupMaxScore;
-        this.groupMaxScoreChefIndex = tempCalCache.groupMaxScoreChefIndex;
-        //console.log(tempCalCache)
+        this.recipePL = recipePL
+
+        let calAllCache1 = this.calAllCache(scoreCache,recipeCount,chefCount);
+        this.groupMaxScore = calAllCache1.groupMaxScore
+        this.groupMaxScoreChefIndex = calAllCache1.groupMaxScoreChefIndex
+        this.groupRecipeIndex = calAllCache1.groupRecipeIndex
+        //console.log(calAllCache1)
     }
 
 
@@ -74,22 +55,22 @@ class ChefAndRecipeThread {
             recipes: null,
             permuation: null,
         }
-
-
+        const playRecipes = this.playRecipes;
+        const recipeCount = Math.sqrt(this.groupRecipeIndex.length);
         for (let i = start; i < limit; i++) {
-            let p = ((i - start) / (limit - start)) * 100 | 0;
-            if (p > lastP) {
-                self.postMessage({type: 'p', p: (p - lastP)})
-                lastP = p
-            }
-            const precipes = this.playRecipes[i];
+            // let p = ((i - start) / (limit - start)) * 100 | 0;
+            // if (p > lastP) {
+            //     self.postMessage()
+            //     lastP = p
+            // }
+
+            const pIndex = i * 9;
             let cal = 0;
             for (let k = 0; k < 1680; k++) {
-
-                const ints = ChefAndRecipeThread.disordePermuation_$LI$()[k];
-                score1Index = this.groupScoreCacheNoIndex[precipes[ints[0]]][precipes[ints[1]]] + (precipes[ints[2]] - precipes[ints[1]] - 1);
-                score2Index = this.groupScoreCacheNoIndex[precipes[ints[3]]][precipes[ints[4]]] + (precipes[ints[5]] - precipes[ints[4]] - 1);
-                score3Index = this.groupScoreCacheNoIndex[precipes[ints[6]]][precipes[ints[7]]] + (precipes[ints[8]] - precipes[ints[7]] - 1);
+                const ints = this.recipePL[k];
+                score1Index = this.groupRecipeIndex[playRecipes[pIndex + ints[0]]  *recipeCount + playRecipes[pIndex + ints[1]]] + (playRecipes[pIndex + ints[2]] - playRecipes[pIndex + ints[1]] - 1);
+                score2Index = this.groupRecipeIndex[playRecipes[pIndex + ints[3]]   *recipeCount + playRecipes[pIndex + ints[4]]] + (playRecipes[pIndex + ints[5]] - playRecipes[pIndex + ints[4]] - 1);
+                score3Index = this.groupRecipeIndex[playRecipes[pIndex + ints[6]]   *recipeCount + playRecipes[pIndex + ints[7]]] + (playRecipes[pIndex + ints[8]] - playRecipes[pIndex + ints[7]] - 1);
 
                 score1Index = score1Index * 3;
                 score2Index = score2Index * 3;
@@ -108,7 +89,7 @@ class ChefAndRecipeThread {
                         maxScore = score;
                         result.maxScore = maxScore;
                         result.maxScoreChefGroup = [chef1, chef2, chef3];
-                        result.recipes = precipes;
+                        result.recipes = playRecipes.slice(pIndex, pIndex + 9);
                         result.permuation = ints;
                     } else {
                         //有某个厨师重复出现，则便利所有可能
@@ -126,7 +107,7 @@ class ChefAndRecipeThread {
                                             maxScore = score;
                                             result.maxScore = maxScore;
                                             result.maxScoreChefGroup = [chef1, chef2, chef3];
-                                            result.recipes = precipes;
+                                            result.recipes = playRecipes.slice(pIndex, pIndex + 9);
                                             result.permuation = ints;
                                         }
                                     }
@@ -145,43 +126,97 @@ class ChefAndRecipeThread {
         return result;
     }
 
+    calAllCache( scoreCache, recipeCount, chefCount){
 
-    static permute(need, tmp, count, start) {
-        if ((count[0] + count[1] + count[2]) === 9) {
-            for (let i = 0; i < 9; i++) {
-                ChefAndRecipeThread.disordePermuation_$LI$()[ChefAndRecipeThread.index][i] = tmp[i];
+        let maxIndex = 0;
+        for (let i = 0; i < recipeCount; i++) {
+            for (let j = i + 1; j < recipeCount; j++) {
+                for (let k = j + 1; k < recipeCount; k++) {
+                    maxIndex++;
+                }
             }
-            ChefAndRecipeThread.index++;
-            return;
         }
-        for (let j = 0; j < 3; j++) {
-            if (count[j] === 3) {
-                continue;
+        console.log(`菜谱组合 ${maxIndex}`)
+
+        const groupRecipeIndex = new Int32Array(recipeCount * recipeCount)
+        const groupMaxScore = new Int32Array(maxIndex * 3);
+        const groupMaxScoreChefIndex = new Int32Array(maxIndex * 3)
+
+
+        console.time("计算菜谱组合最高3个得分")
+        let index = 0;
+        for (let i = 0; i < recipeCount; i++) {
+            for (let j = i + 1; j < recipeCount; j++) {
+                groupRecipeIndex[i * recipeCount + j] = index / 3;
+                for (let k = j + 1; k < recipeCount; k++) {
+                    //每一组菜谱组合，计算得分最高的五个厨师
+                    let a = 0, b = 0, c = 0, ai = 0, bi = 0, ci = 0;
+
+                    //todo 这里计算最大值的时候，是否可以把厨具也考虑进去？
+                    //todo 厨师最大值，厨师带各种厨具的最大值
+                    //todo 厨师带各种遗玉的最大值
+
+                    /*
+                    *
+                    * 如果是厨师搭配厨具
+                    *
+                    * 不应该使用全厨具,
+                    * 对于每一组菜来说，可以单独看待厨师和厨具
+                    *
+                    * 单独计算每组菜谱得分最高的3个厨师，
+                    * 单独计算每组菜谱得分最高的5个厨具，（保存厨具可以带来的增量分数）
+                    *
+                    * 以20%价格增加为基准，如果最终价格达不到，则不适用这个厨具
+                    *
+                    * */
+
+                    for (let t = 0; t < chefCount; t++) {
+                        let num = 0;
+                        //这里改成计算每组菜谱组合小的最大
+                        if (!(scoreCache[t * recipeCount + i] === 0 || scoreCache[t * recipeCount + j] === 0 || scoreCache[t * recipeCount + k] === 0)) {
+                            num = scoreCache[t * recipeCount + i] + scoreCache[t * recipeCount + j] + scoreCache[t * recipeCount + k];
+                        }
+
+                        if (num > a) {
+                            c = b;
+                            ci = bi;
+                            b = a;
+                            bi = ai;
+                            a = num;
+                            ai = t;
+                        } else if (num > b) {
+                            c = b;
+                            ci = bi;
+                            b = num;
+                            bi = t;
+                        } else if (num > c) {
+                            c = num;
+                            ci = t;
+                        }
+
+                    }
+
+                    groupMaxScoreChefIndex[index] = ai;
+                    groupMaxScoreChefIndex[index + 1] = bi;
+                    groupMaxScoreChefIndex[index + 2] = ci;
+
+                    groupMaxScore[index] = a
+                    groupMaxScore[index + 1] = b
+                    groupMaxScore[index + 2] = c
+
+                    index = index + 3;
+                }
+
             }
-            tmp[(j * 3) + count[j]] = need[start];
-            count[j]++;
-            ChefAndRecipeThread.permute(need, tmp, count, start + 1);
-            count[j]--;
+
+            postMessage(  {type: 'p', p:    index/(maxIndex*3)})
+
+        }
+        console.timeEnd("计算菜谱组合最高3个得分")
+        return{
+            groupRecipeIndex,groupMaxScore,groupMaxScoreChefIndex
         }
     }
-
-
 }
-
-ChefAndRecipeThread.__static_initialized = false;
-
-/**
- * 将一组有序的菜谱排列，  生成其所有的无序排列情况
- * 这里的排序可以理解为，有三个桶，每个桶中可以放三个元素（桶中元素不考虑顺序）， 计算有多少种放置方法
- *
- * @param playress 有序的菜谱排列
- * @param start    当前排列的元素（0-8）
- * @param count    记录一组无序排列情况中，排列元素个数
- */
-ChefAndRecipeThread.index = 0;
-
-ChefAndRecipeThread.disordePermuation_$LI$();
-ChefAndRecipeThread.__static_initialize();
-
 
 let chefAndRecipeThread = new ChefAndRecipeThread();

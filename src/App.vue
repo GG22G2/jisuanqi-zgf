@@ -5,20 +5,42 @@
         <el-tab-pane label="计算器">
           <el-row>
 
-            <!--              <el-text class="mx-1" size="large">额外技法值</el-text>-->
+             <el-text class="mx-1" size="large">使用厨具</el-text>
 
-            <!--              <el-input-number :precision="0" :min="0" :max="9999" :controls="false"-->
-            <!--                               v-model="calConfig.addBaseValue"></el-input-number>-->
+              <el-switch
+                  v-model="calConfig.useEquip"
+                  size="small"
+                  :active-value="true"
+                  :inactive-value="false"
+              />
 
-            <!--              <div style="padding-left: 3px"></div>-->
 
-            <!--              <el-text class="mx-1" size="large">过滤比例</el-text>-->
-
-            <!--              <el-input-number :precision="2" :min="0" :max="1" :controls="false"-->
-            <!--                               v-model="calConfig.filterGroupScore"></el-input-number>-->
 
 
           </el-row>
+
+          <el-row>
+
+              <el-text class="mx-1" size="large">候选厨师最低星级</el-text>
+
+
+            <el-select
+                v-model="calConfig.chefMinRarity"
+                placeholder="Select"
+
+                style="width: 100px"
+            >
+              <el-option
+                  v-for="item in 5"
+                  :label="item+'星'"
+                  :value="item"
+              />
+            </el-select>
+
+          </el-row>
+
+      <div style="margin-top: 5px"> </div>
+
           <el-row>
             <el-select filterable style="width: 300px" v-model="currentRule" placeholder="请选择厨神计算器">
               <el-option
@@ -61,18 +83,23 @@
         <el-tab-pane label="数据">
 
           <el-row>
-            <el-button @click="reloadGameData">重新加载游戏数据</el-button>
+            <el-button @click="reloadGameData">加载游戏数据</el-button>
           </el-row>
+          <div  style="text-align: left">
+            说明: [加载游戏数据] 是从图鉴网拿最新的厨师，菜谱等数据。只需要在图鉴网数据更新后重新加载一次即可。
+          </div>
+
+          <div style="margin-top: 5px"></div>
 
           <el-row>
-            <span>个人数据</span>
+            <span>官方数据导入（厨子满级满阶才会导入）</span>
           </el-row>
           <el-row>
             <el-col :span="6">
               <el-input
                   type="input"
                   resize="none"
-                  placeholder="校验码"
+                  placeholder="在游戏设置页面获取校验码"
                   v-model="dataCode">
               </el-input>
 
@@ -82,18 +109,23 @@
               <el-button @click="saveRecipesAndChefsData">导入数据</el-button>
             </el-col>
           </el-row>
+
         </el-tab-pane>
         <el-tab-pane label="说明">
-          奖励倍数取自白采菊花
-          <br/>
-          游戏数据取自图鉴网
-          <br/>
-          只是为了能拿到高保
-          <br/>
-          已考虑：厨师修炼,菜谱专精,自带厨具
-          <br/>
-          不考虑厨具，不考虑厨师在场时给其他厨师的加成技能,没有调料和心法盘
-          <br/>
+         <div>
+           奖励倍数取自白采菊花
+           <br/>
+           游戏数据取自图鉴网
+           <br/>
+           只是为了能拿到高保
+           <br/>
+           已考虑：厨师修炼,菜谱专精
+           <br/>
+           厨具：不开启时使用自带厨具，开启后使用部分3星出局
+           <br/>
+           不考虑厨师在场时给其他厨师的光环技能,没有调料和心法盘
+           <br/>
+         </div>
         </el-tab-pane>
 
       </el-tabs>
@@ -112,10 +144,11 @@ import {CalConfig} from './core/bundle.js'
 import {parseData, Task} from './core/task.js'
 
 
+
 export default {
   data() {
     return {
-      calConfig: new CalConfig([0, 5, 3, 3, 2, 2, 2, 2, 2, 2], 14, false, false),
+      calConfig: new CalConfig([0, 5, 3, 3, 2, 2, 2, 2, 2, 2], 5, false, false),
       percentage: 0,
       showPercentage: false,
       dataCode: '',
@@ -137,7 +170,7 @@ export default {
   mounted() {
 
   },
-  created() {
+  async created() {
     this.init();
     window.onmessage = (event) => {
       this.percentage = Math.round(event.data);
