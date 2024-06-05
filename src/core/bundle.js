@@ -114,9 +114,40 @@ class Calculator {
         if (recipe.steam !== 0) {
             add += (effect.usesteam);
         }
+
+
+        if (recipe.Tasty) {
+            add += (effect.useTasty);
+        }
+        if (recipe.Salty) {
+            add += (effect.useSalty);
+        }
+        if (recipe.Spicy) {
+            add += (effect.useSpicy);
+        }
+        if (recipe.Sweet) {
+            add += (effect.useSweet);
+        }
+        if (recipe.Bitter) {
+            add += (effect.useBitter);
+        }
+        if (recipe.Sour) {
+            add += (effect.useSour);
+        }
+
+
+        //console.log(recipe)
         const tags = recipe.tags;
         add += (effect.usecreation * tags[0]) + (effect.usemeat * tags[1]) + (effect.usevegetable * tags[2]) + (effect.usefish * tags[3]);
         return add;
+    }
+
+    /**
+     * 计算遗玉能带来的加成
+     * */
+    calAmberPrice(ownRecipe,) {
+
+
     }
 
     calSinglePrice(ownChef, ownRecipe, decorationEffect) {
@@ -542,9 +573,9 @@ class GodInference {
         let data = {
             playRecipes2,
             recipePL,
-            scoreCache:this.tempCalCache.scoreCache,
-            recipeCount:this.tempCalCache.recipeCount,
-            chefCount:this.tempCalCache.chefCount,
+            scoreCache: this.tempCalCache.scoreCache,
+            recipeCount: this.tempCalCache.recipeCount,
+            chefCount: this.tempCalCache.chefCount,
         }
 
 
@@ -566,7 +597,7 @@ class GodInference {
 
                         curP = event.data.p;
                         //console.log(curP)
-                        postMessage(curP*100)
+                        postMessage(curP * 100)
                     } else {
                         //console.log(event.data)
                         //计算完成，安排下一个任务
@@ -599,7 +630,7 @@ class GodInference {
                     }
                 };
 
-                calWorker.postMessage({data: data,start: startIndex, limit: limit})
+                calWorker.postMessage({data: data, start: startIndex, limit: limit})
 
                 startIndex = limit;
                 limit = Math.min(limit + 300, total)
@@ -703,7 +734,7 @@ class GodInference {
         const integerIntegerMap = this.calQuantity(finalMaterialCount);
 
         //根据份数计算得分，并降序排列返回
-          this.sortOfPrice(integerIntegerMap, this.tempOwnRecipes,limit);
+        this.sortOfPrice(integerIntegerMap, this.tempOwnRecipes, limit);
 
         const removes = [];
         for (let i = 0; i < limit; i++) {
@@ -712,7 +743,7 @@ class GodInference {
             const quantity = integerIntegerMap[selectRecipe.recipeId];
             const newplay = new Array(9);
 
-            for (let j = 0; j < index-1; j++) {
+            for (let j = 0; j < index - 1; j++) {
                 newplay[j] = play[j];
             }
 
@@ -724,7 +755,7 @@ class GodInference {
 
             const p = new PlayRecipe(selectRecipe, quantity);
 
-            newplay[index-1]=p
+            newplay[index - 1] = p
             this.recipePermutation(index + 1, newplay, ingredientLimit);
             ingredientLimit.setMaterialCount(clone);
         }
@@ -750,12 +781,12 @@ class GodInference {
         return this.counts;
     }
 
-    sortOfPrice(quantity, recipes,limit) {
+    sortOfPrice(quantity, recipes, limit) {
         let prices = this.prices;
         for (let i = 0; i < recipes.length; i++) {
             let ownRecipe = recipes[i];
             const reward = this.recipeReward[ownRecipe.recipeId];
-            prices[ownRecipe.recipeId] = ((ownRecipe.price * (1 + reward) * quantity[ownRecipe.recipeId]) | 0 );
+            prices[ownRecipe.recipeId] = ((ownRecipe.price * (1 + reward) * quantity[ownRecipe.recipeId]) | 0);
         }
 
         recipes.sort((r1, r2) => {
@@ -848,7 +879,7 @@ class GodInference {
                             //console.log(effect.value)
                             if (effect.value > 0) {
                                 price = true;
-                                useTotal+=effect.value;
+                                useTotal += effect.value;
                             }
                         }
 
@@ -861,7 +892,7 @@ class GodInference {
                     }
                 }
 
-                if (!reduce && price && useTotal  >= 20) {
+                if (!reduce && price && useTotal >= 20) {
                     //console.log(equip)
                     equipTemp.push(equip)
                 }
@@ -911,7 +942,6 @@ class GodInference {
         return chef1;
     }
 }
-
 
 
 class IngredientLimit {
@@ -1000,7 +1030,7 @@ class IngredientLimit {
     getFinalMaterialCount() {
         let destinationArray = new Int32Array(47);
         destinationArray.set(this.materialCount);
-       return destinationArray;
+        return destinationArray;
     }
 
     setMaterialCount(materialCount) {
@@ -1368,7 +1398,7 @@ class TempCalCache {
 
         this.scoreCache = new Int32Array(chefIndexMax * recipeIndexMax);
 
-       this.groupRecipeIndex = null;
+        this.groupRecipeIndex = null;
 
 
     }
@@ -1427,12 +1457,33 @@ class builder {
                 const index = ownRecipe.index;
                 const singlePrice = this.kitchenGodCal.calSinglePrice(ownChef, ownRecipe);
                 scoreCache[i * recipeCount + index] = singlePrice * ownRecipe.count;
+
+
             }
         }
+
+        //todo 如果考虑遗玉，那么只考虑作用于菜谱的遗玉,一个厨师3个遗玉默认都应该是相同的，所以用三个5星同种遗玉  也就是39%的各种加成
+        //并且在计算得分阶段就
+
+
+        //各个品质对应的加成
+        //生成17中effect
+
+        //
+        // for (let t = 0; t < this.ownRecipes.length; t++) {
+        //     //17种 6技法 6调料 5星级
+        //     // const ownRecipe = this.ownRecipes[t];
+        //     // const index = ownRecipe.index;
+        //      const singlePrice = this.kitchenGodCal.calSinglePrice(ownChef, ownRecipe);
+        //     // scoreCache[i * recipeCount + index] = singlePrice * ownRecipe.count;
+        //
+        //
+        //
+        //
+        // }
+
+
     }
-
-
-
 
 
     validEffectParseIsOk() {
@@ -1567,8 +1618,21 @@ class CalRecipe {
         this.exPrice = recipe.exPrice;
         this.rarity = recipe.rarity;
         this.tags = recipe.tags;
+
+
+        this.Tasty = false;
+        this.Salty = false;
+        this.Spicy = false;
+        this.Sweet = false;
+        this.Bitter = false;
+        this.Sour = false;
+
+
+        this[recipe.condiment] = true;
+
         this.id = count << 14 | this.recipeId;
     }
+
 
     /**
      * @return {string}
@@ -1600,6 +1664,7 @@ class Chef {
         this.creation = 0;
         this.fish = 0;
         this.meat = 0;
+        this.condiment = null; //调料口味
         this.skill = null;
         this.ultimateGoal = null;
         this.ultimateSkill = null;
