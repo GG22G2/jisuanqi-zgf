@@ -145,7 +145,10 @@ class Calculator {
     /**
      * 计算遗玉能带来的加成
      * */
-    calAmberPrice(ownRecipe,) {
+    calAmberPrice(ownRecipe, effect) {
+        let price = ownRecipe.price;
+
+        return price * this.skillAdd(effect, ownRecipe);
 
 
     }
@@ -574,6 +577,7 @@ class GodInference {
             playRecipes2,
             recipePL,
             scoreCache: this.tempCalCache.scoreCache,
+            amberPrice: this.tempCalCache.amberPrice,
             recipeCount: this.tempCalCache.recipeCount,
             chefCount: this.tempCalCache.chefCount,
         }
@@ -775,7 +779,11 @@ class GodInference {
         let ownRecipe;
         for (let i = 0; i < length; i++) {
             ownRecipe = this.tempOwnRecipes[i];
+
             const count = IngredientLimit.cookingQuantit(ownRecipe.materials2, ownRecipe.limit + maxequiplimit[ownRecipe.rarity], materialCount);
+            // if (ownRecipe.name==='蟹酿橙'&&count===25){
+            //     debugger
+            // }
             this.counts[ownRecipe.recipeId] = count;
         }
         return this.counts;
@@ -988,8 +996,8 @@ class IngredientLimit {
     }
 
     cookingQuantit(recipe, expected) {
-        const limit = recipe.limit + this.extraLimit[recipe.rarity];
-        expected = expected < limit ? expected : limit;
+        //const limit = recipe.limit + this.extraLimit[recipe.rarity];
+        //expected = expected < limit ? expected : limit;
         return IngredientLimit.cookingQuantitiyAndReduce(((a1, a2) => {
             if (a1.length >= a2.length) {
                 a1.length = 0;
@@ -1122,18 +1130,21 @@ class SkillEffect {
         this.knifePercent = 0;
         this.fryPercent = 0;
         this.steamPercent = 0;
+
+        this.usefish = 0;
+        this.usecreation = 0;
+        this.usemeat = 0;
+        this.usevegetable = 0;
+
+        this.goldgain = 0;
+        this.tempAddtion = null;
+
         this.usebake = 0;
         this.useboil = 0;
         this.usestirfry = 0;
         this.useknife = 0;
         this.usefry = 0;
         this.usesteam = 0;
-        this.usefish = 0;
-        this.usecreation = 0;
-        this.usemeat = 0;
-        this.usevegetable = 0;
-        this.goldgain = 0;
-        this.tempAddtion = null;
 
         //酸甜苦辣咸苦
         this.useTasty = 0;
@@ -1145,6 +1156,7 @@ class SkillEffect {
 
         //1,2,3,4,5星料理售价加成
         this.rarity = [0, 0, 0, 0, 0, 0]
+
 
         // !!!大于等于!!!  某个份数生效
         this.excessCookbookNum = []
@@ -1397,7 +1409,7 @@ class TempCalCache {
         this.recipeCount = recipeIndexMax;
 
         this.scoreCache = new Int32Array(chefIndexMax * recipeIndexMax);
-
+        this.amberPrice = new Int32Array(recipeIndexMax * 17);
         this.groupRecipeIndex = null;
 
 
@@ -1457,8 +1469,6 @@ class builder {
                 const index = ownRecipe.index;
                 const singlePrice = this.kitchenGodCal.calSinglePrice(ownChef, ownRecipe);
                 scoreCache[i * recipeCount + index] = singlePrice * ownRecipe.count;
-
-
             }
         }
 
@@ -1469,19 +1479,44 @@ class builder {
         //各个品质对应的加成
         //生成17中effect
 
-        //
-        // for (let t = 0; t < this.ownRecipes.length; t++) {
-        //     //17种 6技法 6调料 5星级
-        //     // const ownRecipe = this.ownRecipes[t];
-        //     // const index = ownRecipe.index;
-        //      const singlePrice = this.kitchenGodCal.calSinglePrice(ownChef, ownRecipe);
-        //     // scoreCache[i * recipeCount + index] = singlePrice * ownRecipe.count;
-        //
-        //
-        //
-        //
-        // }
+        if (false){
+            //计算遗玉
+            let useList = ['usebake', 'useboil', 'usestirfry', 'useknife', 'usefry', 'usesteam'
+                , 'useTasty', 'useSalty', 'useSpicy', 'useSweet', 'useBitter', 'useSour']
 
+            let effects = [];
+            for (const effectItem of useList) {
+                let skillEffect = new SkillEffect();
+
+                skillEffect[effectItem] = 0.24;
+                effects.push(skillEffect);
+
+            }
+
+            for (let i = 1; i <= 5; i++) {
+                //1,2,3,4,5星料理售价加成
+                let skillEffect = new SkillEffect();
+                skillEffect.rarity[i] = 0.26
+                effects.push(skillEffect);
+            }
+
+
+            let amberPrice = this.tempCalCache.amberPrice
+            for (let t = 0; t < this.ownRecipes.length; t++) {
+                //17种 6技法 6调料 5星级
+                const ownRecipe = this.ownRecipes[t];
+                let startIndex = t * 17;
+                for (let i = 0; i < 17; i++) {
+                    const effect = effects[i];
+                    const extraPrice = (this.kitchenGodCal.calAmberPrice(ownRecipe, effect) * ownRecipe.count) | 0;
+                    amberPrice[startIndex + i] = extraPrice;
+                }
+            }
+
+            //每个菜的加成已经算出来了，再算一下组合的加成
+
+           // console.log(amberPrice)
+        }
 
     }
 
