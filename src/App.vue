@@ -49,7 +49,7 @@
                   :value="item.value">
               </el-option>
             </el-select>
-            <el-button @click="calculator">计算</el-button>
+            <el-button :disabled="this.currentRule===''" @click="calculator">计算</el-button>
           </el-row>
 
           <el-row>
@@ -182,43 +182,47 @@ export default {
       this.topScore = null;
       let {officialGameData, myGameData} = await this.loadData();
 
-      if (officialGameData == null || myGameData == null) {
-        ElNotification({
-          title: '无法计算',
-          message: '缺少游戏数据，无法计算',
-          type: 'error',
-        })
+      if ( myGameData == null || officialGameData == null) {
+        this.errorNotify( '无法计算','缺少数据，需要从官方导入个人数据','error');
         return;
       }
       this.percentage = 0;
       let ruleStr = null;
       this.showPercentage = true;
-      // 挑选本周规则，还是历史规则
-      console.log('获取厨神规则...')
-      if (this.currentRule === -1) {
-        ruleStr = this.curWeekRule;
-      } else {
-        ruleStr = await this.getRule(this.currentRule);
+      try {
+        // 挑选本周规则，还是历史规则
+        console.log('获取厨神规则...')
+        if (this.currentRule === -1) {
+          ruleStr = this.curWeekRule;
+        } else {
+          ruleStr = await this.getRule(this.currentRule);
+        }
+      }catch (e) {
       }
-      console.log('获取成功')
+      if (ruleStr==null){
+        this.errorNotify( '获取规则失败','','error');
+        return null;
+      }
 
       let topResult = await Task.main(officialGameData, myGameData, ruleStr, this.calConfig);
       if (topResult == null) {
-        ElNotification({
-          title: '无法计算',
-          message: '规则不符合预期',
-          type: 'error',
-        })
+        this.errorNotify( '无法计算','规则不符合预期','error');
         this.deleteRule(this.currentRule);
       }
       //讲规则缓存起来，下次服用
-
+      console.log(topResult)
 
       //console.log(topResult[0].chefs)
       this.topChefs = topResult[0].chefs
       this.topScore = topResult[0].score
     },
-
+    errorNotify(title,message,error){
+      ElNotification({
+        title: title,
+        message: message,
+        type: error,
+      })
+    },
     async getRule(ruleTime) {
       let oldRule = localStorage.getItem(ruleTime);
       if (oldRule) {
@@ -237,9 +241,14 @@ export default {
     async loadData() {
       let gameData = await this.getOfficeGameData();
       let myGameData = localStorage.getItem('myGameData');
+
       if (gameData == null || myGameData == null) {
-        return
+        return {
+          officialGameData: null,
+          myGameData: null
+        }
       }
+
       myGameData = JSON.parse(myGameData);
       return parseData(gameData, myGameData, this.calConfig);
     },
@@ -296,18 +305,10 @@ export default {
     async saveRecipesAndChefsData() {
       let data = await this.loadMyData(this.dataCode);
       if (data != null && data !== '' && data !== '数据过期') {
-        ElNotification({
-          title: '加载成功',
-          message: '加载成功',
-          type: 'success',
-        })
+        this.errorNotify( '加载成功','加载个人成功','success');
         localStorage.setItem('myGameData', JSON.stringify(data))
       } else {
-        ElNotification({
-          title: '加载失败',
-          message: data,
-          type: 'error',
-        })
+        this.errorNotify( '加载失败',data,'error');
       }
     },
     async getOfficeGameData() {
@@ -327,11 +328,7 @@ export default {
       let data = await (await fetch(`https://foodgame.top/data/data.min.json?v=${new Date().getTime()}`)).json();
       let dateStr = JSON.stringify(data);
       localStorage.setItem('gameData', dateStr)
-      ElNotification({
-        title: '加载成功',
-        message: '加载成功',
-        type: 'success',
-      })
+      this.errorNotify( '加载成功','加载游戏数据成功','success');
       return dateStr;
     },
     cardClick(event) {
