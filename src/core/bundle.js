@@ -283,6 +283,7 @@ class GlobalAddition {
         }
         this.manfill = Math.floor(this.manfill / 6);
         this.womanfill = Math.floor(this.womanfill / 6)
+
     }
 
     parseEffect(effect) {
@@ -530,10 +531,123 @@ class GodInference {
         return arr;
     }
 
+
+    refer2() {
+        //this.officialGameData
+
+        //计算每个菜谱 不冲突的菜谱集合
+
+        let recipes = this.myGameData.recipes;
+        recipes = recipes.slice(0,80)
+        //将菜谱转换成索引
+
+
+        let length = recipes.length;
+
+        //每个菜谱  食材不冲突列表
+        let result = new Array(length);
+        for (let i = 0; i < length; i++) {
+            let r = new Array(length).fill(false);
+            let a = recipes[i];
+            for (let j = i+1; j < length; j++) {
+                if (i === j) {
+                    continue
+                }
+                let b = recipes[j];
+
+                if ((a.materialFeature & b.materialFeature) === BigInt(0)) {
+                    r[j] = true;
+                }
+
+            }
+            result[i] = r;
+
+            //生成一个map
+
+        }
+        //大约80的菜谱不冲突，
+        console.log(result)
+
+
+        //取最大得分的200个菜
+
+
+        //选第一个菜，然后选择和第一个菜不冲突的第二个菜，然后选择和前两个菜不冲突的第三个菜
+
+
+        //可以在不冲突菜谱基础上，检查是否存在冲突更优解
+
+        //每个菜为第一个被选中的菜，然后选择后续8道食材不冲突菜谱
+        let pr = [];
+        this.plcf(new Int32Array(9), 0, Array(length).fill(true), length,result,pr,0)
+        console.log(pr)
+
+
+
+
+
+
+    }
+
+    /**
+     * @param chef 已选索引位置
+     * @param deep 已选深度
+     * @param cf   所有已选菜谱组成的不冲突集合
+     * @param recipeCount   厨师数
+     * @param noConflict   不冲突情况
+     * */
+    plcf(chef, deep, cf, recipeCount, noConflict,pr,iStart) {
+
+        if (deep === 9) {
+           //console.log(chef)
+            pr.push(chef)
+
+            return chef;
+        }
+
+        //挑选下一个厨师
+        for (let i = iStart; i < recipeCount; i++) {
+            if (cf[i] === false) {
+                continue
+            }
+
+
+            let chefClone = new Int32Array(9);
+            chefClone.set(chef);
+
+            chefClone[deep] = i;
+
+            let recipeConflict = noConflict[i];
+
+            let cfClone = new Array(recipeCount);
+            //合并recipeConflict 和  cf
+
+            for (let j = 0 ; j < recipeCount; j++) {
+                if (recipeConflict[j] && cf[j]) {
+                    cfClone[j] = true;
+                } else {
+                    cfClone[j] = false;
+                }
+            }
+
+            //计算下一个厨师
+
+            this.plcf(chefClone, deep + 1, cfClone, recipeCount, noConflict,pr,i+1)
+
+            if (deep===0){
+                console.log(pr.length)
+            }
+        }
+
+
+    }
+
+
     /**
      * 假设: 在没有厨具的情况下得分最高的，在带上厨具后仍然是最高的  虽然不一定，但很可能是一个比较优质的解
      */
     refer() {
+        //this.refer2()
         let start = Date.now(), end;
 
         if (this.tempCalCache == null) {
@@ -1479,7 +1593,7 @@ class builder {
         //各个品质对应的加成
         //生成17中effect
 
-        if (false){
+        if (false) {
             //计算遗玉
             let useList = ['usebake', 'useboil', 'usestirfry', 'useknife', 'usefry', 'usesteam'
                 , 'useTasty', 'useSalty', 'useSpicy', 'useSweet', 'useBitter', 'useSour']
@@ -1515,7 +1629,7 @@ class builder {
 
             //每个菜的加成已经算出来了，再算一下组合的加成
 
-           // console.log(amberPrice)
+            // console.log(amberPrice)
         }
 
     }
@@ -1790,8 +1904,26 @@ class OfficialGameData {
     getSkill(id) {
         return this.skillHashMap.get(id);
     }
+
+
+    buildMaterialFeature() {
+
+        for (const recipe of this.recipes) {
+            let materialFeature = BigInt(0n);
+            let materials = recipe.materials;
+            for (const material of materials) {
+                materialFeature = setBit(materialFeature, material.material);
+            }
+            recipe.materialFeature = materialFeature;
+        }
+    }
+
+
 }
 
+function setBit(m, pos) {
+    return m | BigInt(1) << BigInt(pos);
+}
 
 class SortUtils {
 
@@ -1925,6 +2057,7 @@ class Recipe {
         this.steam = 0;
         this.materials = null;
         this.materials2 = null;
+        this.materialFeature = 0;
         this.price = 0;
         this.exPrice = 0;
         this.time = 0;

@@ -382,8 +382,8 @@ function parseData(gameData, myGameData, calConfig) {
     officialGameData.buffs = gameData.buffs
     officialGameData.intents = gameData.intents
 
-
     officialGameData.buildMap();
+    officialGameData.buildMaterialFeature();
 
     myGameData.equips = [];
 
@@ -392,6 +392,8 @@ function parseData(gameData, myGameData, calConfig) {
         myGameData: importChefsAndRecipesFromFoodGame(officialGameData, myGameData, calConfig)
     }
 }
+
+
 
 
 /**
