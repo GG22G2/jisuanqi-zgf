@@ -5,13 +5,13 @@ class CalConfig {
     /**
      * 计算配置，暂时只有加法额外追加的值
      * */
-    constructor(deepLimit, chefMinRarity, useEquip, useAll) {
+    constructor(deepLimit,recipeLimit, chefMinRarity, useEquip, useAll) {
 
         this.deepLimit = deepLimit;   //生成菜谱时候的遍历深度
         this.chefMinRarity = chefMinRarity;    //上场3个厨师的星级和
         this.useEquip = useEquip;//使用厨具  带实现
         this.useAll = useAll;//拥有全厨师全修炼，全菜谱全专精
-
+        this.recipeLimit = recipeLimit;//菜谱限制，根据厨神规则排序菜谱，只是用前recipeLimit个菜
     }
 
 }
@@ -378,6 +378,7 @@ class GodInference {
         if (calConfig != null) {
             this.chefMinRarity = calConfig.chefMinRarity;
             this.deepLimit = calConfig.deepLimit;
+            this.recipeLimit = calConfig.recipeLimit;
             this.useEquip = calConfig.useEquip;
         }
 
@@ -475,7 +476,7 @@ class GodInference {
         const finalMaterialCount = ingredientLimit.getFinalMaterialCount();
         const recipeCounts = this.calQuantity(finalMaterialCount);
         this.sortOfPrice(recipeCounts, this.tempOwnRecipes);
-        this.tempOwnRecipes = this.tempOwnRecipes.slice(0, Math.min(80, this.tempOwnRecipes.length));
+        this.tempOwnRecipes = this.tempOwnRecipes.slice(0, Math.min(this.recipeLimit, this.tempOwnRecipes.length));
 
         this.recipePermutation(1, [], ingredientLimit);
         console.timeEnd('排列菜谱')

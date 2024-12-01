@@ -3,27 +3,22 @@
     <el-main>
       <el-tabs type="card" @tab-click="cardClick">
         <el-tab-pane label="计算器">
-          <el-row>
 
+
+<!--          厨具有bug,可能导致同一个厨师出现多次,先隐藏了-->
+          <el-row v-show="false">
              <el-text class="mx-1" size="large">使用厨具</el-text>
-
               <el-switch
                   v-model="calConfig.useEquip"
                   size="small"
                   :active-value="true"
                   :inactive-value="false"
               />
-
-
-
-
           </el-row>
 
+
           <el-row>
-
               <el-text class="mx-1" size="large">候选厨师最低星级</el-text>
-
-
             <el-select
                 v-model="calConfig.chefMinRarity"
                 placeholder="Select"
@@ -36,7 +31,18 @@
                   :value="item"
               />
             </el-select>
+          </el-row>
 
+          <el-row>
+            <el-text class="mx-1" size="large">候选菜谱数量(根据奖励倍数排序)</el-text>
+            <el-input-number
+                v-model="calConfig.recipeLimit"
+                style="width: 140px"
+                :step="10"
+                :min="30"
+                :max="180"
+            >
+            </el-input-number>
           </el-row>
 
       <div style="margin-top: 5px"> </div>
@@ -148,7 +154,7 @@ import {parseData, Task} from './core/task.js'
 export default {
   data() {
     return {
-      calConfig: new CalConfig([0, 7, 5, 3, 3, 3, 3, 3, 3, 4], 5, false, false),
+      calConfig: new CalConfig([0, 7, 6, 5, 3, 3, 3, 3, 3, 4],80, 5, false, false),
       percentage: 0,
       showPercentage: false,
       dataCode: '',
