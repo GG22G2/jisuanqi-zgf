@@ -148,7 +148,7 @@ import {parseData, Task} from './core/task.js'
 export default {
   data() {
     return {
-      calConfig: new CalConfig([0, 7, 3, 3, 3, 3, 3, 3, 3, 4], 5, false, false),
+      calConfig: new CalConfig([0, 7, 5, 3, 3, 3, 3, 3, 3, 4], 5, false, false),
       percentage: 0,
       showPercentage: false,
       dataCode: '',

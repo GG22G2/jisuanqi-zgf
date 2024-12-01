@@ -467,8 +467,6 @@ class GodInference {
     buildIndex() {
         console.time('排列菜谱')
 
-        //todo 菜谱排列优化思路
-
         /*
         * 目前来看 菜谱都集中在前几十道菜上
         *
@@ -477,44 +475,11 @@ class GodInference {
         const finalMaterialCount = ingredientLimit.getFinalMaterialCount();
         const recipeCounts = this.calQuantity(finalMaterialCount);
         this.sortOfPrice(recipeCounts, this.tempOwnRecipes);
-        this.tempOwnRecipes = this.tempOwnRecipes.slice(0, Math.min(110, this.tempOwnRecipes.length));
+        this.tempOwnRecipes = this.tempOwnRecipes.slice(0, Math.min(80, this.tempOwnRecipes.length));
 
         this.recipePermutation(1, [], ingredientLimit);
         console.timeEnd('排列菜谱')
         console.info("候选菜谱列表" + this.playRecipes.length);
-
-
-        //this.playRecipes检查一下哪一组是
-
-
-        // let check = {
-        //     '菊花养生锅': 16,
-        //     '金汤海鲜宴': 10,
-        //     '山海兜': 16,
-        //     '春饼': 10,
-        //     '蘑菇蒸鳕鱼': 12,
-        //     '酸菜炒汤圆': 25,
-        //     '肉生法': 10,
-        //     '孟婆汤': 16,
-        //     '心愿果': 18
-        // }
-        //
-        // for (let i = 0; i < this.playRecipes.length; i++) {
-        //     let temp = this.playRecipes[i];
-        //     let matchCount = 0;
-        //     for (let j = 0; j < 9; j++) {
-        //         let count = temp[j].count
-        //         let name = temp[j].recipe.name;
-        //         if (check[name] === count) {
-        //             matchCount++;
-        //         }
-        //     }
-        //     // console.log(matchCount)
-        //     if (matchCount === 9) {
-        //         debugger
-        //     }
-        //
-        // }
 
 
         // this.tempTest();
@@ -541,32 +506,9 @@ class GodInference {
         }
         console.log("菜谱种类", maps.size)
 
-
         this.ownRecipes = new Array(maps.size)
         for (let [key, value] of maps.entries()) {
             this.ownRecipes[value.index] = value
-        }
-
-    }
-
-    compressionAndMapping(maps) {
-        // let keys = maps.keys();
-        // let ints = new Array(maps.size);
-        // let index = 0;
-        // for (let key of keys) {
-        //     ints[index++] = key;
-        // }
-        // //debugger
-        // SortUtils.quickSort(ints);
-        // for (let i = 0; i < ints.length; i++) {
-        //     const calRecipe = maps.get(ints[i]);
-        //     calRecipe.index = i;
-        // }
-
-        let i= 0;
-        for (let [key, value] of maps.entries()) {
-            value.index = i;
-            i++;
         }
     }
 
@@ -585,113 +527,6 @@ class GodInference {
         }
 
         return arr;
-    }
-
-
-    refer2() {
-        //this.officialGameData
-
-        //计算每个菜谱 不冲突的菜谱集合
-
-        let recipes = this.myGameData.recipes;
-        recipes = recipes.slice(0, 80)
-        //将菜谱转换成索引
-
-
-        let length = recipes.length;
-
-        //每个菜谱  食材不冲突列表
-        let result = new Array(length);
-        for (let i = 0; i < length; i++) {
-            let r = new Array(length).fill(false);
-            let a = recipes[i];
-            for (let j = i + 1; j < length; j++) {
-                if (i === j) {
-                    continue
-                }
-                let b = recipes[j];
-
-                if ((a.materialFeature & b.materialFeature) === BigInt(0)) {
-                    r[j] = true;
-                }
-
-            }
-            result[i] = r;
-
-            //生成一个map
-
-        }
-        //大约80的菜谱不冲突，
-        console.log(result)
-
-
-        //取最大得分的200个菜
-
-
-        //选第一个菜，然后选择和第一个菜不冲突的第二个菜，然后选择和前两个菜不冲突的第三个菜
-
-
-        //可以在不冲突菜谱基础上，检查是否存在冲突更优解
-
-        //每个菜为第一个被选中的菜，然后选择后续8道食材不冲突菜谱
-        let pr = [];
-        this.plcf(new Int32Array(9), 0, Array(length).fill(true), length, result, pr, 0)
-        console.log(pr)
-
-
-    }
-
-    /**
-     * @param chef 已选索引位置
-     * @param deep 已选深度
-     * @param cf   所有已选菜谱组成的不冲突集合
-     * @param recipeCount   厨师数
-     * @param noConflict   不冲突情况
-     * */
-    plcf(chef, deep, cf, recipeCount, noConflict, pr, iStart) {
-
-        if (deep === 9) {
-            //console.log(chef)
-            pr.push(chef)
-
-            return chef;
-        }
-
-        //挑选下一个厨师
-        for (let i = iStart; i < recipeCount; i++) {
-            if (cf[i] === false) {
-                continue
-            }
-
-
-            let chefClone = new Int32Array(9);
-            chefClone.set(chef);
-
-            chefClone[deep] = i;
-
-            let recipeConflict = noConflict[i];
-
-            let cfClone = new Array(recipeCount);
-            //合并recipeConflict 和  cf
-
-            for (let j = 0; j < recipeCount; j++) {
-                if (recipeConflict[j] && cf[j]) {
-                    cfClone[j] = true;
-                } else {
-                    cfClone[j] = false;
-                }
-            }
-
-            //计算下一个厨师
-
-            this.plcf(chefClone, deep + 1, cfClone, recipeCount, noConflict, pr, i + 1)
-
-            if (deep === 0) {
-                console.log(pr.length)
-            }
-        }
-
-
     }
 
 
@@ -896,20 +731,11 @@ class GodInference {
 
         //计算奖励倍数加持下,根据剩余食材计算各个菜最多做多少份
         let recipeCounts = this.calQuantity(finalMaterialCount);
-        //根据份数计算得分，并降序排列返回
-        //this.sortOfPrice(recipeCounts, this.tempOwnRecipes);
-
-        let startI = 0;
 
 
         const removes = [];
-        for (let i = startI; i < limit; i++) {
-
-            if (index === 1 && i === 1) {
-                // debugger
-            }
+        for (let i = 0; i < limit; i++) {
             //根据份数计算得分，并降序排列返回
-            //recipeCounts = this.calQuantity(finalMaterialCount);
             this.sortOfPrice(recipeCounts, this.tempOwnRecipes);
             const selectRecipe = this.tempOwnRecipes.shift();
             removes.push(selectRecipe);
@@ -926,8 +752,6 @@ class GodInference {
 
             //修改食材库存
             ingredientLimit.cookingQuantity(selectRecipe, quantity);
-
-
 
             newPlayRecipes[index - 1] = new PlayRecipe(selectRecipe, quantity);
             this.recipePermutation(index + 1, newPlayRecipes, ingredientLimit);
