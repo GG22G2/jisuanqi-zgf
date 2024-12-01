@@ -466,13 +466,60 @@ class GodInference {
      */
     buildIndex() {
         console.time('排列菜谱')
-        this.recipePermutation(1, [], new IngredientLimit(this.materials));
+
+        //todo 菜谱排列优化思路
+
+        /*
+        * 目前来看 菜谱都集中在前几十道菜上
+        *
+        * */
+        const ingredientLimit = new IngredientLimit(this.materials)
+        const finalMaterialCount = ingredientLimit.getFinalMaterialCount();
+        const recipeCounts = this.calQuantity(finalMaterialCount);
+        this.sortOfPrice(recipeCounts, this.tempOwnRecipes);
+        this.tempOwnRecipes = this.tempOwnRecipes.slice(0, Math.min(110, this.tempOwnRecipes.length));
+
+        this.recipePermutation(1, [], ingredientLimit);
         console.timeEnd('排列菜谱')
         console.info("候选菜谱列表" + this.playRecipes.length);
+
+
+        //this.playRecipes检查一下哪一组是
+
+
+        // let check = {
+        //     '菊花养生锅': 16,
+        //     '金汤海鲜宴': 10,
+        //     '山海兜': 16,
+        //     '春饼': 10,
+        //     '蘑菇蒸鳕鱼': 12,
+        //     '酸菜炒汤圆': 25,
+        //     '肉生法': 10,
+        //     '孟婆汤': 16,
+        //     '心愿果': 18
+        // }
+        //
+        // for (let i = 0; i < this.playRecipes.length; i++) {
+        //     let temp = this.playRecipes[i];
+        //     let matchCount = 0;
+        //     for (let j = 0; j < 9; j++) {
+        //         let count = temp[j].count
+        //         let name = temp[j].recipe.name;
+        //         if (check[name] === count) {
+        //             matchCount++;
+        //         }
+        //     }
+        //     // console.log(matchCount)
+        //     if (matchCount === 9) {
+        //         debugger
+        //     }
+        //
+        // }
+
+
         // this.tempTest();
         const maps = new Map();
-        let quchong = new Set();
-
+        let index= 0;
         for (let i = 0; i < this.playRecipes.length; i++) {
             let recipesTemp = this.playRecipes[i];
             for (let j = 0; j < 9; j++) {
@@ -482,17 +529,19 @@ class GodInference {
                 const mapId = count << 14 | recipeId;
                 let calRecipe = maps.get(mapId);
                 if (calRecipe == null) {
-                    let key = playRecipe.getRecipe().name + count;
-                    if (!quchong.has(key)) {
-                        calRecipe = new CalRecipe(playRecipe.getRecipe(), count);
-                        maps.set(mapId, calRecipe);
-                        quchong.add(key)
-                    }
+                    calRecipe = new CalRecipe(playRecipe.getRecipe(), count);
+                    calRecipe.index=index;
+                    playRecipe.index=index;
+                    maps.set(mapId, calRecipe);
+                    index++;
+                }else {
+                    playRecipe.index=calRecipe.index;
                 }
             }
         }
         console.log("菜谱种类", maps.size)
-        this.compressionAndMapping(maps);
+
+
         this.ownRecipes = new Array(maps.size)
         for (let [key, value] of maps.entries()) {
             this.ownRecipes[value.index] = value
@@ -501,16 +550,23 @@ class GodInference {
     }
 
     compressionAndMapping(maps) {
-        let keys = maps.keys();
-        let ints = new Array(maps.size);
-        let index = 0;
-        for (let key of keys) {
-            ints[index++] = key;
-        }
-        SortUtils.quickSort(ints);
-        for (let i = 0; i < ints.length; i++) {
-            const calRecipe = maps.get(ints[i]);
-            calRecipe.index = i;
+        // let keys = maps.keys();
+        // let ints = new Array(maps.size);
+        // let index = 0;
+        // for (let key of keys) {
+        //     ints[index++] = key;
+        // }
+        // //debugger
+        // SortUtils.quickSort(ints);
+        // for (let i = 0; i < ints.length; i++) {
+        //     const calRecipe = maps.get(ints[i]);
+        //     calRecipe.index = i;
+        // }
+
+        let i= 0;
+        for (let [key, value] of maps.entries()) {
+            value.index = i;
+            i++;
         }
     }
 
@@ -538,7 +594,7 @@ class GodInference {
         //计算每个菜谱 不冲突的菜谱集合
 
         let recipes = this.myGameData.recipes;
-        recipes = recipes.slice(0,80)
+        recipes = recipes.slice(0, 80)
         //将菜谱转换成索引
 
 
@@ -549,7 +605,7 @@ class GodInference {
         for (let i = 0; i < length; i++) {
             let r = new Array(length).fill(false);
             let a = recipes[i];
-            for (let j = i+1; j < length; j++) {
+            for (let j = i + 1; j < length; j++) {
                 if (i === j) {
                     continue
                 }
@@ -579,12 +635,8 @@ class GodInference {
 
         //每个菜为第一个被选中的菜，然后选择后续8道食材不冲突菜谱
         let pr = [];
-        this.plcf(new Int32Array(9), 0, Array(length).fill(true), length,result,pr,0)
+        this.plcf(new Int32Array(9), 0, Array(length).fill(true), length, result, pr, 0)
         console.log(pr)
-
-
-
-
 
 
     }
@@ -596,10 +648,10 @@ class GodInference {
      * @param recipeCount   厨师数
      * @param noConflict   不冲突情况
      * */
-    plcf(chef, deep, cf, recipeCount, noConflict,pr,iStart) {
+    plcf(chef, deep, cf, recipeCount, noConflict, pr, iStart) {
 
         if (deep === 9) {
-           //console.log(chef)
+            //console.log(chef)
             pr.push(chef)
 
             return chef;
@@ -622,7 +674,7 @@ class GodInference {
             let cfClone = new Array(recipeCount);
             //合并recipeConflict 和  cf
 
-            for (let j = 0 ; j < recipeCount; j++) {
+            for (let j = 0; j < recipeCount; j++) {
                 if (recipeConflict[j] && cf[j]) {
                     cfClone[j] = true;
                 } else {
@@ -632,9 +684,9 @@ class GodInference {
 
             //计算下一个厨师
 
-            this.plcf(chefClone, deep + 1, cfClone, recipeCount, noConflict,pr,i+1)
+            this.plcf(chefClone, deep + 1, cfClone, recipeCount, noConflict, pr, i + 1)
 
-            if (deep===0){
+            if (deep === 0) {
                 console.log(pr.length)
             }
         }
@@ -656,22 +708,15 @@ class GodInference {
             console.timeEnd('构建缓存')
         }
 
-
-        const playRecipes2 = new Int32Array(this.playRecipes.length * 9);
-
-
-        const idToIndex = new Map();
-        for (let i = 0; i < this.ownRecipes.length; i++) {
-            idToIndex.set(this.ownRecipes[i].recipeId, this.ownRecipes[i].index);
-        }
+        const playRecipesArr = new Int32Array(this.playRecipes.length * 9);
 
         for (let i = 0; i < this.playRecipes.length; i++) {
             let playRecipes = this.playRecipes[i];
             for (let j = 0; j < 9; j++) {
-                playRecipes2[i * 9 + j] = idToIndex.get(playRecipes[j].getRecipe().recipeId)
+                playRecipesArr[i * 9 + j] = playRecipes[j].index    //idToIndex.get(playRecipes[j].getRecipe().recipeId)
             }
-            //todo 我忘了这里为什么要排序了
-            this.sortArraySegment(playRecipes2, i * 9, i * 9 + 8)
+            //让新放入的9个值从小打到排列
+            this.sortArraySegment(playRecipesArr, i * 9, i * 9 + 8)
         }
 
         let topPlayChefs = [];
@@ -686,16 +731,16 @@ class GodInference {
 
         const recipePL = ChefAndRecipeThread.disordePermuation_$LI$();
 
-        //console.log(playRecipes2)
+        //console.log(playRecipesArr)
         let data = {
-            playRecipes2,
+            playRecipesArr,
             recipePL,
             scoreCache: this.tempCalCache.scoreCache,
             amberPrice: this.tempCalCache.amberPrice,
             recipeCount: this.tempCalCache.recipeCount,
             chefCount: this.tempCalCache.chefCount,
         }
-
+        //debugger
 
         //不同区段的实际计算量是不同的, 计算一般集中的前半部分
         let startIndex = 0, limit = Math.min(300000, total);
@@ -736,7 +781,7 @@ class GodInference {
                         }
 
                         if (startIndex >= total && resultCount === sendCount) {
-                            topPlayChefs = that.parseLong(playRecipes2, maxScoreResult);
+                            topPlayChefs = that.parseLong(playRecipesArr, maxScoreResult);
                             end = Date.now();
                             console.info("总用时 " + (end - start) + "ms");
                             postMessage(100)
@@ -760,11 +805,12 @@ class GodInference {
     /**
      * 保存得分 菜谱，菜谱排列，厨师组合索引   1符号位，20位得分，18位菜谱索引，11位菜谱排列，14位厨师索引
      * cal = ((((cal << 18 | i) << 11) | k) << 14) | i2;
-     * @param {int[][]} playRecipes
+     * @param {int[]} playRecipes
      * @param {BigInt} socres
      * @return {TopResult[]}
      */
     parseLong(playRecipes, maxScoreResult) {
+
         let score = 0;
         score = maxScoreResult.maxScore;
         const precipes = maxScoreResult.recipes;
@@ -795,9 +841,9 @@ class GodInference {
      * @param {TopResult} topPlayChef
      */
     calSecondStage(topPlayChef) {
-
+       // debugger
         let chefIds = topPlayChef.chefs;
-        let recipeIds = topPlayChef.recepeids;
+        let recipeIds = topPlayChef.recipeids;
         let result = []
         let chefs = [];
         for (let i = 0; i < 3; i++) {
@@ -849,33 +895,43 @@ class GodInference {
         const finalMaterialCount = ingredientLimit.getFinalMaterialCount();
 
         //计算奖励倍数加持下,根据剩余食材计算各个菜最多做多少份
-        const integerIntegerMap = this.calQuantity(finalMaterialCount);
-
+        let recipeCounts = this.calQuantity(finalMaterialCount);
         //根据份数计算得分，并降序排列返回
-        this.sortOfPrice(integerIntegerMap, this.tempOwnRecipes, limit);
+        //this.sortOfPrice(recipeCounts, this.tempOwnRecipes);
+
+        let startI = 0;
+
 
         const removes = [];
-        for (let i = 0; i < limit; i++) {
+        for (let i = startI; i < limit; i++) {
+
+            if (index === 1 && i === 1) {
+                // debugger
+            }
+            //根据份数计算得分，并降序排列返回
+            //recipeCounts = this.calQuantity(finalMaterialCount);
+            this.sortOfPrice(recipeCounts, this.tempOwnRecipes);
             const selectRecipe = this.tempOwnRecipes.shift();
             removes.push(selectRecipe);
-            const quantity = integerIntegerMap[selectRecipe.recipeId];
-            const newplay = new Array(9);
+            const quantity = recipeCounts[selectRecipe.recipeId];
+            if (quantity===0){
+                continue;
+            }
+
+            const newPlayRecipes = new Array(9);
 
             for (let j = 0; j < index - 1; j++) {
-                newplay[j] = play[j];
+                newPlayRecipes[j] = play[j];
             }
 
             //修改食材库存
-            ingredientLimit.cookingQuantit(selectRecipe, quantity);
+            ingredientLimit.cookingQuantity(selectRecipe, quantity);
 
-            //拷贝库存
-            const clone = ingredientLimit.getFinalMaterialCount();
 
-            const p = new PlayRecipe(selectRecipe, quantity);
 
-            newplay[index - 1] = p
-            this.recipePermutation(index + 1, newplay, ingredientLimit);
-            ingredientLimit.setMaterialCount(clone);
+            newPlayRecipes[index - 1] = new PlayRecipe(selectRecipe, quantity);
+            this.recipePermutation(index + 1, newPlayRecipes, ingredientLimit);
+            ingredientLimit.setMaterialCount(finalMaterialCount);
         }
 
         for (let it = 0; it < removes.length; it++) {
@@ -888,28 +944,26 @@ class GodInference {
      * @return {int[]}
      */
     calQuantity(materialCount) {
+        let counts = new Array(7000).fill(0)
         const maxequiplimit = this.globalAddtion.maxequiplimit;
         const length = this.tempOwnRecipes.length;
-        let ownRecipe;
         for (let i = 0; i < length; i++) {
-            ownRecipe = this.tempOwnRecipes[i];
-
-            const count = IngredientLimit.cookingQuantit(ownRecipe.materials2, ownRecipe.limit + maxequiplimit[ownRecipe.rarity], materialCount);
-            // if (ownRecipe.name==='蟹酿橙'&&count===25){
-            //     debugger
-            // }
-            this.counts[ownRecipe.recipeId] = count;
+            let ownRecipe = this.tempOwnRecipes[i];
+            const count = IngredientLimit.cookingQuantity(ownRecipe.materials2, ownRecipe.limit + maxequiplimit[ownRecipe.rarity], materialCount);
+            counts[ownRecipe.recipeId] = count;
         }
-        return this.counts;
+        return counts;
     }
 
     sortOfPrice(quantity, recipes, limit) {
-        let prices = this.prices;
+        let prices = new Array(7000).fill(0);
         for (let i = 0; i < recipes.length; i++) {
             let ownRecipe = recipes[i];
             const reward = this.recipeReward[ownRecipe.recipeId];
             prices[ownRecipe.recipeId] = ((ownRecipe.price * (1 + reward) * quantity[ownRecipe.recipeId]) | 0);
         }
+
+        //返回每个菜对应的索引位置
 
         recipes.sort((r1, r2) => {
             return prices[r2.recipeId] - prices[r1.recipeId];
@@ -1109,21 +1163,22 @@ class IngredientLimit {
         }
     }
 
-    cookingQuantit(recipe, expected) {
+    cookingQuantity(recipe, count) {
         //const limit = recipe.limit + this.extraLimit[recipe.rarity];
         //expected = expected < limit ? expected : limit;
-        return IngredientLimit.cookingQuantitiyAndReduce(((a1, a2) => {
-            if (a1.length >= a2.length) {
-                a1.length = 0;
-                a1.push.apply(a1, a2);
-                return a1;
-            } else {
-                return a2.slice(0);
-            }
-        })([], recipe.materials), expected, this.materialCount);
+        // return IngredientLimit.cookingQuantityAndReduce(((a1, a2) => {
+        //     if (a1.length >= a2.length) {
+        //         a1.length = 0;
+        //         a1.push.apply(a1, a2);
+        //         return a1;
+        //     } else {
+        //         return a2.slice(0);
+        //     }
+        // })([], recipe.materials), expected, this.materialCount);
+        IngredientLimit.cookingQuantityAndReduce(recipe.materials, count, this.materialCount);
     }
 
-    static cookingQuantit(materials, expected, materialCount) {
+    static cookingQuantity(materials, expected, materialCount) {
         let max = expected, t;
         const length = materials.length;
         for (let i = 0; i < length; i++) {
@@ -1135,18 +1190,17 @@ class IngredientLimit {
         return max;
     }
 
-    static cookingQuantitiyAndReduce(materials, expected, materialCount) {
-        let max = expected;
+    static cookingQuantityAndReduce(materials, count, materialCount) {
+        let maxCount = count;
         let t;
         const length = materials.length;
         for (let i = 0; i < length; i++) {
             const material = materials[i];
             t = materialCount[material.material] / material.quantity;
             t = t | 0;
-            max = t < max ? t : max;
-            materialCount[material.material] -= material.quantity * max;
+            maxCount = t < maxCount ? t : maxCount;
+            materialCount[material.material] -= material.quantity * maxCount;
         }
-        return max;
     }
 
     getFinalMaterialCount() {
@@ -1735,7 +1789,7 @@ function buildChefSkillEffect(officialGameData, chef) {
 class TopResult {
     constructor(playChefs, recipeIndex, score) {
         this.chefs = null;
-        this.recepeids = null;
+        this.recipeids = null;
         this.id = 0;
         this.score = 0;
         this.update(playChefs, recipeIndex, score);
@@ -1743,7 +1797,7 @@ class TopResult {
 
     update(playChefs, recipeIndex, score) {
         this.chefs = playChefs;
-        this.recepeids = recipeIndex;
+        this.recipeids = recipeIndex;
         this.score = score;
     }
 }
@@ -1780,6 +1834,7 @@ class CalRecipe {
         this[recipe.condiment] = true;
 
         this.id = count << 14 | this.recipeId;
+        this.recipe =recipe;
     }
 
 
