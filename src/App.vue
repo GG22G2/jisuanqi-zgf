@@ -331,7 +331,7 @@ export default {
       return null;
     },
     async reloadGameData() {
-      let data = await (await fetch(`https://foodgame.top/data/data.min.json?v=${new Date().getTime()}`)).json();
+      let data = await (await fetch(`https://foodgame.github.io/data/data.min.json?v=${new Date().getTime()}`)).json();
       let dateStr = JSON.stringify(data);
       localStorage.setItem('gameData', dateStr)
       this.errorNotify( '加载成功','加载游戏数据成功','success');

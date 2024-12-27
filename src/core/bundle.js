@@ -179,7 +179,7 @@ class Calculator {
             let excessRank = skillEffect.excessRank;
             for (let j = 0; j < excessRank.length; j++) {
                 let rank = excessRank[j];
-                if (this.qualityAdd[rank[0]] >= qualityAddQ) {
+                if (this.qualityAdd[rank[0]] <= qualityAddQ) {
                     qualityAddS += rank[1];
                 }
             }
