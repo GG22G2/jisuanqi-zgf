@@ -5,7 +5,7 @@ class CalConfig {
     /**
      * 计算配置，暂时只有加法额外追加的值
      * */
-    constructor(deepLimit,recipeLimit, chefMinRarity, useEquip, useAll) {
+    constructor(deepLimit, recipeLimit, chefMinRarity, useEquip, useAll) {
 
         this.deepLimit = deepLimit;   //生成菜谱时候的遍历深度
         this.chefMinRarity = chefMinRarity;    //上场3个厨师的星级和
@@ -94,6 +94,32 @@ class Calculator {
         return this.qualityAdd[(ratio | 0)];
     }
 
+
+    basePriceAdd(effect, recipe) {
+        //price = price * (1 + skillEffect.basePrice + skillEffect.basicPriceUseSteam)
+        let add =  effect.basePrice;
+        if (recipe.bake !== 0) {
+            add += (effect.basicPriceUseBake);
+        }
+        if (recipe.boil !== 0) {
+            add += (effect.basicPriceUseBoil);
+        }
+        if (recipe.stirfry !== 0) {
+            add += (effect.basicPriceUseStirfry);
+        }
+        if (recipe.knife !== 0) {
+            add += (effect.basicPriceUseKnife);
+        }
+        if (recipe.fry !== 0) {
+            add += (effect.basicPriceUseFry);
+        }
+        if (recipe.steam !== 0) {
+            add += (effect.basicPriceUseSteam);
+        }
+
+        return add;
+    }
+
     skillAdd(effect, recipe) {
         let add = 0;
         if (recipe.bake !== 0) {
@@ -142,6 +168,8 @@ class Calculator {
         return add;
     }
 
+
+
     /**
      * 计算遗玉能带来的加成
      * */
@@ -154,6 +182,7 @@ class Calculator {
     }
 
     calSinglePrice(ownChef, ownRecipe, decorationEffect) {
+        //一份菜的得分 = ((菜谱单价*(1*基础售价加成)) *  1 * (p+g+r))) =
         let qualityAddS = 0;  //技法加成
         let skillEffect = ownChef.skillEffect;
         const rarity = skillEffect.rarity;
@@ -213,6 +242,16 @@ class Calculator {
 
         qualityAddS += this.skillAdd(skillEffect, ownRecipe);
         let price = ownRecipe.price;
+
+        //基础售价的加成
+        let basePriceAdd = this.basePriceAdd(skillEffect, ownRecipe);
+
+        price = price * (1+basePriceAdd);
+       // price = price * (1 + skillEffect.basePrice + skillEffect.basicPriceUseSteam)
+        // if ((1 + skillEffect.basePrice + skillEffect.basicPriceUseSteam)>1.01){
+        //     console.log(ownChef)
+        // }
+
         return Math.ceil(price * (this.base + this.recipeReward[ownRecipe.recipeId] + sexAdd + qualityAddQ + qualityAddS + this.useAll[ownRecipe.rarity] + rarity[ownRecipe.rarity])) | 0;
     }
 
@@ -485,7 +524,7 @@ class GodInference {
 
         // this.tempTest();
         const maps = new Map();
-        let index= 0;
+        let index = 0;
         for (let i = 0; i < this.playRecipes.length; i++) {
             let recipesTemp = this.playRecipes[i];
             for (let j = 0; j < 9; j++) {
@@ -496,12 +535,12 @@ class GodInference {
                 let calRecipe = maps.get(mapId);
                 if (calRecipe == null) {
                     calRecipe = new CalRecipe(playRecipe.getRecipe(), count);
-                    calRecipe.index=index;
-                    playRecipe.index=index;
+                    calRecipe.index = index;
+                    playRecipe.index = index;
                     maps.set(mapId, calRecipe);
                     index++;
-                }else {
-                    playRecipe.index=calRecipe.index;
+                } else {
+                    playRecipe.index = calRecipe.index;
                 }
             }
         }
@@ -677,7 +716,7 @@ class GodInference {
      * @param {TopResult} topPlayChef
      */
     calSecondStage(topPlayChef) {
-       // debugger
+        // debugger
         let chefIds = topPlayChef.chefs;
         let recipeIds = topPlayChef.recipeids;
         let result = []
@@ -741,7 +780,7 @@ class GodInference {
             const selectRecipe = this.tempOwnRecipes.shift();
             removes.push(selectRecipe);
             const quantity = recipeCounts[selectRecipe.recipeId];
-            if (quantity===0){
+            if (quantity === 0) {
                 continue;
             }
 
@@ -1147,6 +1186,18 @@ class SkillEffect {
         this.useBitter = 0;
         this.useSour = 0;
 
+        //基础售价增加百分比
+        this.basePrice = 0;
+
+        //基础售价增加百分比   蒸技法  1代表100%
+
+        this.basicPriceUseBake = 0;
+        this.basicPriceUseBoil = 0;
+        this.basicPriceUseStirfry = 0;
+        this.basicPriceUseKnife = 0;
+        this.basicPriceUseFry = 0;
+        this.basicPriceUseSteam = 0;
+
         //1,2,3,4,5星料理售价加成
         this.rarity = [0, 0, 0, 0, 0, 0]
 
@@ -1304,6 +1355,12 @@ class SkillEffect {
                 case 'BasicPrice':
                     //todo 我还没有这一类的厨师，没法判断计算规则，
                     // console.log('基础售价类技能还没有生效')
+                    break;
+                case 'BasicPriceUseSteam':
+                    //蒸类料理基础售价
+                    if (effect.cal === 'Percent') {
+                        this.basicPriceUseSteam += effect.value / 100;
+                    }
                     break;
                 case 'CookbookPrice':
                     if (effect.cal === 'Percent') {
@@ -1659,7 +1716,7 @@ class CalRecipe {
         this[recipe.condiment] = true;
 
         this.id = count << 14 | this.recipeId;
-        this.recipe =recipe;
+        this.recipe = recipe;
     }
 
 
