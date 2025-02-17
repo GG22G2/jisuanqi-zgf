@@ -5,13 +5,15 @@ class CalConfig {
     /**
      * 计算配置，暂时只有加法额外追加的值
      * */
-    constructor(deepLimit, recipeLimit, chefMinRarity, useEquip, useAll) {
+    constructor(deepLimit, recipeLimit, chefMinRarity, filterScoreRate, useEquip, useAll) {
 
         this.deepLimit = deepLimit;   //生成菜谱时候的遍历深度
-        this.chefMinRarity = chefMinRarity;    //上场3个厨师的星级和
-        this.useEquip = useEquip;//使用厨具  带实现
-        this.useAll = useAll;//拥有全厨师全修炼，全菜谱全专精
         this.recipeLimit = recipeLimit;//菜谱限制，根据厨神规则排序菜谱，只是用前recipeLimit个菜
+        this.chefMinRarity = chefMinRarity;    //上场3个厨师的星级和
+        this.filterScoreRate = filterScoreRate;//使用厨具  带实现
+        this.useEquip = useEquip;//使用厨具  待实现
+        this.useAll = useAll;//拥有全厨师全修炼，全菜谱全专精
+
     }
 
 }
@@ -97,7 +99,7 @@ class Calculator {
 
     basePriceAdd(effect, recipe) {
         //price = price * (1 + skillEffect.basePrice + skillEffect.basicPriceUseSteam)
-        let add =  effect.basePrice;
+        let add = effect.basePrice;
         if (recipe.bake !== 0) {
             add += (effect.basicPriceUseBake);
         }
@@ -167,7 +169,6 @@ class Calculator {
         add += (effect.usecreation * tags[0]) + (effect.usemeat * tags[1]) + (effect.usevegetable * tags[2]) + (effect.usefish * tags[3]);
         return add;
     }
-
 
 
     /**
@@ -246,25 +247,16 @@ class Calculator {
         //基础售价的加成
         let basePriceAdd = this.basePriceAdd(skillEffect, ownRecipe);
 
-        price = price * (1+basePriceAdd);
-       // price = price * (1 + skillEffect.basePrice + skillEffect.basicPriceUseSteam)
-        // if ((1 + skillEffect.basePrice + skillEffect.basicPriceUseSteam)>1.01){
-        //     console.log(ownChef)
-        // }
+        price = price * (1 + basePriceAdd);
 
         return Math.ceil(price * (this.base + this.recipeReward[ownRecipe.recipeId] + sexAdd + qualityAddQ + qualityAddS + this.useAll[ownRecipe.rarity] + rarity[ownRecipe.rarity])) | 0;
     }
 
 
     calSkillPrice(ownRecipe, skillEffect) {
-
         const rarity = skillEffect.rarity;
-
-
         let qualityAddS = this.skillAdd(skillEffect, ownRecipe);
         let price = ownRecipe.price;
-
-
         return Math.ceil(price * (qualityAddS)) | 0;
     }
 }
@@ -418,6 +410,7 @@ class GodInference {
             this.chefMinRarity = calConfig.chefMinRarity;
             this.deepLimit = calConfig.deepLimit;
             this.recipeLimit = calConfig.recipeLimit;
+            this.filterScoreRate = calConfig.filterScoreRate;
             this.useEquip = calConfig.useEquip;
         }
 
@@ -449,7 +442,6 @@ class GodInference {
         GodInference.modifyChefValue(this.ownChefs, this.globalAddtion);
 
         this.buildRecipeTags();
-
 
         if (this.useEquip) {
             //todo 带实现，如果使用厨具，则把厨师按照出局数量，扩充计算
@@ -513,13 +505,52 @@ class GodInference {
         * */
         const ingredientLimit = new IngredientLimit(this.materials)
         const finalMaterialCount = ingredientLimit.getFinalMaterialCount();
-        const recipeCounts = this.calQuantity(finalMaterialCount);
-        this.sortOfPrice(recipeCounts, this.tempOwnRecipes);
+
+        let recipeCounts= new Int32Array(7000)
+        this.calQuantity(recipeCounts,finalMaterialCount);
+
+        //this.sortOfPrice(recipeCounts, this.tempOwnRecipes);
+        this.estimatedPriceAndSort(recipeCounts, this.tempOwnRecipes);
         this.tempOwnRecipes = this.tempOwnRecipes.slice(0, Math.min(this.recipeLimit, this.tempOwnRecipes.length));
 
         this.recipePermutation(1, [], ingredientLimit);
+
+        let maxScore = 0;
+        for (let i = this.playRecipes.length - 1; i >= 0; i--) {
+            let temp = this.playRecipes[i];
+            let score = 0;
+            for (let j = 0; j < 9; j++) {
+                let count = temp[j].count
+                let ownRecipe = temp[j].recipe
+                const reward = this.recipeReward[ownRecipe.recipeId];
+                score += ((ownRecipe.price * (1 + reward) * count) | 0);
+            }
+            if (maxScore < score) {
+                maxScore = score;
+            }
+        }
+        const filterScoreRate = this.filterScoreRate;
+        //判断食材冲突，食材冲突的不做考虑
+        for (let i = this.playRecipes.length - 1; i >= 0; i--) {
+            let temp = this.playRecipes[i];
+            let score = 0;
+            for (let j = 0; j < 9; j++) {
+                let count = temp[j].count
+                let ownRecipe = temp[j].recipe
+                const reward = this.recipeReward[ownRecipe.recipeId];
+                score += ((ownRecipe.price * (1 + reward) * count) | 0);
+            }
+
+            //这里应该改成，冲突大于5个的不考虑， 然后冲突小于5个的，得分最高的20个菜谱是一定不能存在食材冲突的，然后
+            if ( score < (maxScore * filterScoreRate)) {
+                this.playRecipes.splice(i, 1); // 删除元素，i不变，因为从后向前遍历
+            }
+        }
+
         console.timeEnd('排列菜谱')
         console.info("候选菜谱列表" + this.playRecipes.length);
+
+        //console.log(this.playRecipes)
 
 
         // this.tempTest();
@@ -550,6 +581,43 @@ class GodInference {
         for (let [key, value] of maps.entries()) {
             this.ownRecipes[value.index] = value
         }
+    }
+
+    estimatedPriceAndSort(quantity, recipes, limit) {
+        let prices = new Array(7000).fill(0);
+        for (let i = 0; i < recipes.length; i++) {
+            let ownRecipe = recipes[i];
+            const reward = this.recipeReward[ownRecipe.recipeId];
+
+            //单技法要求按照500来看，双技法要求按照400来估算，评估一个技法值
+            const t2 = this.estimatedChefAdd(ownRecipe);
+
+            prices[ownRecipe.recipeId] = ((ownRecipe.price * (1 + reward + t2) * quantity[ownRecipe.recipeId]) | 0);
+        }
+
+        //返回每个菜对应的索引位置
+        recipes.sort((r1, r2) => {
+            return prices[r2.recipeId] - prices[r1.recipeId];
+        });
+    }
+
+    estimatedChefAdd(recipe) {
+        const abc = [-1, 0, 0.1, 0.3, 0.5, 1.0];
+        const v1 = 500, v2 = 400;
+
+        // 收集所有非零技法值
+        const skills = [];
+        for (const key of ['bake', 'boil', 'stirfry', 'knife', 'fry', 'steam']) {
+            const value = recipe[key];
+            skills.push(value);
+        }
+        skills.sort((a, b) => b - a); // 降序排列
+
+        const t = skills.length;
+
+        let a = Math.min(v1 / skills[0],5) | 0   ; // 最高技法与v1比较
+        let b = Math.min(v2 / skills[1],5) | 0  ; // 次高技法与v2比较
+        return Math.min(abc[a],abc[b]);
     }
 
     sortArraySegment(arr, start, end) {
@@ -664,6 +732,8 @@ class GodInference {
                                 work.terminate();
                             }
                             resolve(that.calSecondStage(topPlayChefs));
+
+                            //that.fenxiTest(maxScoreResult)
                         }
                     }
                 };
@@ -750,6 +820,18 @@ class GodInference {
     }
 
 
+    fenxiTest(result) {
+        console.log(this)
+        let test = result.test
+        let recipeIndexArray = test.recipeIndexArray;
+        for (let i = 0; i < recipeIndexArray.length; i++) {
+            let recipe = this.ownRecipes[recipeIndexArray[i]];
+            const reward = this.recipeReward[recipe.recipe.recipeId]
+            console.log(recipe.name, recipe.count, reward, recipe.price * (1 + reward) * recipe.count)
+        }
+    }
+
+
     /**
      * 生成候选的菜谱序列 9个菜谱
      *
@@ -768,9 +850,9 @@ class GodInference {
 
         //拷贝食材数量
         const finalMaterialCount = ingredientLimit.getFinalMaterialCount();
-
+        let recipeCounts= new Int32Array(7000)
         //计算奖励倍数加持下,根据剩余食材计算各个菜最多做多少份
-        let recipeCounts = this.calQuantity(finalMaterialCount);
+        this.calQuantity(recipeCounts,finalMaterialCount);
 
 
         const removes = [];
@@ -807,8 +889,8 @@ class GodInference {
      * @param {int[]} materialCount 各种食材的剩余数量,数组下标对应食材的id
      * @return {int[]}
      */
-    calQuantity(materialCount) {
-        let counts = new Array(7000).fill(0)
+    calQuantity(counts,materialCount) {
+        //let counts =   this.materialCount = new Int32Array(7000)
         const maxequiplimit = this.globalAddtion.maxequiplimit;
         const length = this.tempOwnRecipes.length;
         for (let i = 0; i < length; i++) {
@@ -820,17 +902,16 @@ class GodInference {
     }
 
     sortOfPrice(quantity, recipes, limit) {
-        let prices = new Array(7000).fill(0);
+        //let prices = new Array(7000).fill(0);
         for (let i = 0; i < recipes.length; i++) {
             let ownRecipe = recipes[i];
             const reward = this.recipeReward[ownRecipe.recipeId];
-            prices[ownRecipe.recipeId] = ((ownRecipe.price * (1 + reward) * quantity[ownRecipe.recipeId]) | 0);
+            ownRecipe.computedPrice   = ownRecipe.price * (1 + reward) * quantity[ownRecipe.recipeId] ;
         }
 
         //返回每个菜对应的索引位置
-
         recipes.sort((r1, r2) => {
-            return prices[r2.recipeId] - prices[r1.recipeId];
+            return r2.computedPrice - r1.computedPrice;
         });
     }
 
@@ -1362,6 +1443,25 @@ class SkillEffect {
                         this.basicPriceUseSteam += effect.value / 100;
                     }
                     break;
+                case 'BasicPriceUseKnife':
+                    //蒸类料理基础售价
+                    if (effect.cal === 'Percent') {
+                        this.basicPriceUseKnife += effect.value / 100;
+                    }
+                    break;
+                case 'BasicPriceUseBake':
+                    //蒸类料理基础售价
+                    if (effect.cal === 'Percent') {
+                        this.basicPriceUseBake += effect.value / 100;
+                    }
+                    break;
+                case 'BasicPriceUseFry':
+                    //蒸类料理基础售价
+                    if (effect.cal === 'Percent') {
+                        this.basicPriceUseFry += effect.value / 100;
+                    }
+                    break;
+
                 case 'CookbookPrice':
                     if (effect.cal === 'Percent') {
                         if (effect.conditionType === 'CookbookRarity') {
@@ -1389,8 +1489,9 @@ class SkillEffect {
                         console.log(skill, effect)
                     }
                     break
-
-
+                case  "MaterialReduce":
+                    //制作料理时   食材消耗数量改动， 这个能增加做的份数， 但是估计增加份数比例最好的情况能代理20%左右的总收益
+                    break;
                 case  "GuestApearRate":
                 case  "GuestAntiqueDropRate":
 
@@ -1406,6 +1507,7 @@ class SkillEffect {
                 case   "Material_Fish":
                 case   "Material_Vegetable":
                 case   "Material_Meat":
+
 
                 case   "Rejuvenation":
                 case   "GuestDropCount":
@@ -1844,7 +1946,6 @@ class OfficialGameData {
 
 
     buildMaterialFeature() {
-
         for (const recipe of this.recipes) {
             let materialFeature = BigInt(0n);
             let materials = recipe.materials;
@@ -1860,75 +1961,6 @@ class OfficialGameData {
 
 function setBit(m, pos) {
     return m | BigInt(1) << BigInt(pos);
-}
-
-class SortUtils {
-
-    static quickSort(array) {
-        const stack = new Array(array.length * 2).fill(0)
-        let top = 0;
-        let low = 0;
-        let high = array.length - 1;
-        let par = SortUtils.partion(array, low, high);
-        if (par > low + 1) {
-            stack[top++] = low;
-            stack[top++] = par - 1;
-        }
-        if (par < high - 1) {
-            stack[top++] = par + 1;
-            stack[top++] = high;
-        }
-        while ((top > 0)) {
-            high = stack[--top];
-            low = stack[--top];
-            par = SortUtils.partion(array, low, high);
-            if (par > low + 1) {
-                stack[top++] = low;
-                stack[top++] = par - 1;
-            }
-            if (par < high - 1) {
-                stack[top++] = par + 1;
-                stack[top++] = high;
-            }
-        }
-    }
-
-    /*private*/
-    static partion(array, low, high) {
-        const temp = array[low];
-        while ((low < high)) {
-            while (((low < high) && temp <= array[high])) {
-                high--;
-            }
-            if (low >= high) {
-                break;
-            } else {
-                array[low] = array[high];
-            }
-            while (((low < high) && array[low] <= temp)) {
-                low++;
-            }
-            if (low === high) {
-                break;
-            } else {
-                array[high] = array[low];
-            }
-        }
-        array[low] = temp;
-        return low;
-    }
-
-    static sort(arr) {
-        for (let i = 1; i < arr.length; i++) {
-            for (let j = 0; j < arr.length - 1; j++) {
-                if (arr[j] > arr[j + 1]) {
-                    const temp = arr[j];
-                    arr[j] = arr[j + 1];
-                    arr[j + 1] = temp;
-                }
-            }
-        }
-    }
 }
 
 
@@ -1950,30 +1982,6 @@ class Effect {
         this.conditionType = null;
         this.conditionValue = null;
         this.conditionValueList = null;
-    }
-}
-
-class GlobalDate {
-    constructor() {
-        this.ownChefs = null;
-        this.ownRecipes = null;
-        this.ownEquips = null;
-        this.tempCalCache = null;
-    }
-}
-
-class Ingredient {
-    constructor() {
-        this.materialId = 0;
-        this.name = null;
-        this.origin = null;
-    }
-}
-
-class Material {
-    constructor() {
-        this.material = 0;
-        this.quantity = 0;
     }
 }
 

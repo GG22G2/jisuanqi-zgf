@@ -40,10 +40,25 @@
                 style="width: 140px"
                 :step="10"
                 :min="30"
-                :max="180"
+                :max="200"
             >
             </el-input-number>
           </el-row>
+
+          <el-row>
+            <el-text class="mx-1" size="large">低分过滤比例(无厨师最大9个菜谱为基准)</el-text>
+            <el-input-number
+                v-model="calConfig.filterScoreRate"
+                style="width: 140px"
+                :precision="2"
+                :min="0"
+                :max="0.95"
+                 :step="0.05"
+                controls-position="right"
+            >
+            </el-input-number>
+          </el-row>
+
 
       <div style="margin-top: 5px"> </div>
 
@@ -125,11 +140,9 @@
            <br/>
            只是为了能拿到高保
            <br/>
-           已考虑：厨师修炼,菜谱专精
+           已考虑: 厨师修炼,菜谱专精,导入数据中厨师佩戴的厨具
            <br/>
-           厨具：不开启时使用自带厨具，开启后使用部分3星出局
-           <br/>
-           不考虑厨师在场时给其他厨师的光环技能,没有调料和心法盘
+           不考虑: 调料,心法盘,光环技能(如李清凝,兰飞鸿，二郎神,贝多分等)
            <br/>
          </div>
         </el-tab-pane>
@@ -154,7 +167,7 @@ import {parseData, Task} from './core/task.js'
 export default {
   data() {
     return {
-      calConfig: new CalConfig([0, 7, 6, 5, 3, 3, 3, 3, 3, 4],80, 5, false, false),
+      calConfig: new CalConfig([0, 10, 10, 8, 8, 8, 8, 8, 10, 30],100, 5, 0.95, false, false),
       percentage: 0,
       showPercentage: false,
       dataCode: '',
