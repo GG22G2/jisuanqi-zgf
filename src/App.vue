@@ -336,7 +336,6 @@ export default {
       if (gameData == null) {
         gameData = await this.reloadGameData();
       }
-
       if (gameData != null) {
         gameData = JSON.parse(gameData);
         return gameData;
