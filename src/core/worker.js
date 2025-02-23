@@ -20,20 +20,32 @@ class ChefAndRecipeThread {
         this.groupRecipeIndex = null;
         this.groupMaxScore = null;
         this.groupMaxScoreChefIndex = null;
+        this.chefRealIndex = null;
 
     }
 
 
-    setBaseData({playRecipesArr, recipePL, amberPrice, scoreCache, recipeCount, chefCount}) {
+    setBaseData({
+                    playRecipesArr,
+                    recipePL,
+                    amberPrice,
+                    scoreCache,
+                    recipeCount,
+                    playChefCount,
+                    ownChefCount,
+                    chefEquipCount
+                }) {
         this.playRecipes = playRecipesArr;
 
         this.recipePL = recipePL
 
-        let calAllCache1 = this.calAllCache(scoreCache, amberPrice, recipeCount, chefCount);
+        let calAllCache1 = this.calAllCache(scoreCache, amberPrice, recipeCount, playChefCount, ownChefCount, chefEquipCount);
         this.groupMaxScore = calAllCache1.groupMaxScore
         this.groupMaxScoreChefIndex = calAllCache1.groupMaxScoreChefIndex
         this.groupRecipeIndex = calAllCache1.groupRecipeIndex
+        this.chefRealIndex = calAllCache1.chefRealIndex
         //console.log(calAllCache1)
+
     }
 
 
@@ -56,7 +68,7 @@ class ChefAndRecipeThread {
         }
         const playRecipes = this.playRecipes;
         const recipeCount = Math.sqrt(this.groupRecipeIndex.length);
-
+        let chefRealIndex = this.chefRealIndex;
         for (let i = start; i < limit; i++) {
             // let p = ((i - start) / (limit - start)) * 100 | 0;
             // if (p > lastP) {
@@ -79,7 +91,6 @@ class ChefAndRecipeThread {
                 let score = this.groupMaxScore[score1Index] + this.groupMaxScore[score2Index] + this.groupMaxScore[score3Index];
 
 
-
                 //当前菜谱组合的最大的分，这个分数可能存在厨师冲突，但这个分数都比maxScore小，剩下的肯定更小
                 if (score > maxScore) {
                     //如果最大分数的厨师冲突，则遍历所有，确定最大分
@@ -87,7 +98,12 @@ class ChefAndRecipeThread {
                     let chef2 = this.groupMaxScoreChefIndex[score2Index]
                     let chef3 = this.groupMaxScoreChefIndex[score3Index]
 
-                    if (chef1 !== chef2 && chef1 !== chef3 && chef2 !== chef3) {
+                    let realChef1 = chefRealIndex[chef1];
+                    let realChef2 = chefRealIndex[chef2];
+                    let realChef3 = chefRealIndex[chef3];
+
+                    if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
+
                         maxScore = score;
                         result.maxScore = maxScore;
                         result.maxScoreChefGroup = [chef1, chef2, chef3];
@@ -103,9 +119,14 @@ class ChefAndRecipeThread {
                                     chef1 = this.groupMaxScoreChefIndex[score1Index + c1]
                                     chef2 = this.groupMaxScoreChefIndex[score2Index + c2]
                                     chef3 = this.groupMaxScoreChefIndex[score3Index + c3]
+
+                                     realChef1 = chefRealIndex[chef1];
+                                     realChef2 = chefRealIndex[chef2];
+                                     realChef3 = chefRealIndex[chef3];
+
                                     if (score > maxScore) {
                                         //console.log("全遍历得到最大分")
-                                        if (chef1 !== chef2 && chef1 !== chef3 && chef2 !== chef3) {
+                                        if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
                                             maxScore = score;
                                             result.maxScore = maxScore;
                                             result.maxScoreChefGroup = [chef1, chef2, chef3];
@@ -130,8 +151,8 @@ class ChefAndRecipeThread {
         return result;
     }
 
-    calAllCache(scoreCache, amberPrice, recipeCount, chefCount) {
-
+    calAllCache(scoreCache, amberPrice, recipeCount, playChefCount, ownChefCount, chefEquipCount) {
+        console.log(chefEquipCount)
         let maxIndex = 0;
         for (let i = 0; i < recipeCount; i++) {
             for (let j = i + 1; j < recipeCount; j++) {
@@ -142,15 +163,25 @@ class ChefAndRecipeThread {
         }
         console.log(`菜谱组合 ${maxIndex}`)
 
-
         const groupRecipeIndex = new Int32Array(recipeCount * recipeCount)
         const groupMaxScore = new Int32Array(maxIndex * 3);
         const groupMaxScoreChefIndex = new Int32Array(maxIndex * 3)
-
+        const chefRealIndex = new Int32Array(playChefCount)
         let index = 0;
 
         console.time("计算菜谱组合最高3个得分")
         index = 0;
+
+        let tAdd = 0;
+        for (let r = 0; r < ownChefCount; r++) {
+            let equipCount = chefEquipCount[r];
+            let start = tAdd, end = tAdd + equipCount + 1;
+            for (let t = start; t < end; t++) {
+                chefRealIndex[t] = r;
+            }
+            tAdd = end;
+        }
+
         for (let i = 0; i < recipeCount; i++) {
             for (let j = i + 1; j < recipeCount; j++) {
                 groupRecipeIndex[i * recipeCount + j] = index / 3;
@@ -172,31 +203,46 @@ class ChefAndRecipeThread {
                     *
                     * */
 
-                    for (let t = 0; t < chefCount; t++) {
-                        let num = 0;
-                        //这里改成计算每组菜谱组合小的最大
-                        if (!(scoreCache[t * recipeCount + i] === 0 || scoreCache[t * recipeCount + j] === 0 || scoreCache[t * recipeCount + k] === 0)) {
-                            num = scoreCache[t * recipeCount + i] + scoreCache[t * recipeCount + j] + scoreCache[t * recipeCount + k];
+                    let tAdd = 0;
+                    for (let r = 0; r < ownChefCount; r++) {
+                        let equipCount = chefEquipCount[r];
+                        let start = tAdd, end = tAdd + equipCount + 1;
+                        let maxNum = 0;
+                        let maxT = 0;
+                        for (let t = start; t < end; t++) {
+                            //这里改成计算每组菜谱组合小的最大
+                            if (!(scoreCache[t * recipeCount + i] === 0 || scoreCache[t * recipeCount + j] === 0 || scoreCache[t * recipeCount + k] === 0)) {
+                                const num = scoreCache[t * recipeCount + i] + scoreCache[t * recipeCount + j] + scoreCache[t * recipeCount + k];
+                                if (num > maxNum) {
+                                    maxNum = num;
+                                    maxT = t;
+                                }
+                            }
+                            chefRealIndex[start]
                         }
+                        tAdd = end;
 
-                        if (num > a) {
+                        //如果是厨师带厨具，应该是这个厨师的所有可能里先算一个最高分，其他厨师算
+
+                        if (maxNum > a) {
                             c = b;
                             ci = bi;
                             b = a;
                             bi = ai;
-                            a = num;
-                            ai = t;
-                        } else if (num > b) {
+                            a = maxNum;
+                            ai = maxT;
+                        } else if (maxNum > b) {
                             c = b;
                             ci = bi;
-                            b = num;
-                            bi = t;
-                        } else if (num > c) {
-                            c = num;
-                            ci = t;
+                            b = maxNum;
+                            bi = maxT;
+                        } else if (maxNum > c) {
+                            c = maxNum;
+                            ci = maxT;
                         }
-
                     }
+
+                    //todo 这里 a b c可能是同一个厨师带不同厨具
 
                     groupMaxScoreChefIndex[index] = ai;
                     groupMaxScoreChefIndex[index + 1] = bi;
@@ -215,7 +261,7 @@ class ChefAndRecipeThread {
         }
         console.timeEnd("计算菜谱组合最高3个得分")
         return {
-            groupRecipeIndex, groupMaxScore, groupMaxScoreChefIndex
+            groupRecipeIndex, groupMaxScore, groupMaxScoreChefIndex,chefRealIndex
         }
     }
 }

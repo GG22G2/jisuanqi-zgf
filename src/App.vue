@@ -5,20 +5,20 @@
         <el-tab-pane label="计算器">
 
 
-<!--          厨具有bug,可能导致同一个厨师出现多次,先隐藏了-->
-          <el-row v-show="false">
-             <el-text class="mx-1" size="large">使用厨具</el-text>
-              <el-switch
-                  v-model="calConfig.useEquip"
-                  size="small"
-                  :active-value="true"
-                  :inactive-value="false"
-              />
+          <!--          厨具有bug,可能导致同一个厨师出现多次,先隐藏了-->
+          <el-row>
+            <el-text class="mx-1" size="large">使用厨具(3星)</el-text>
+            <el-switch
+                v-model="calConfig.useEquip"
+                size="small"
+                :active-value="true"
+                :inactive-value="false"
+            />
           </el-row>
 
 
           <el-row>
-              <el-text class="mx-1" size="large">候选厨师最低星级</el-text>
+            <el-text class="mx-1" size="large">候选厨师最低星级</el-text>
             <el-select
                 v-model="calConfig.chefMinRarity"
                 placeholder="Select"
@@ -52,15 +52,16 @@
                 style="width: 140px"
                 :precision="2"
                 :min="0"
-                :max="0.95"
-                 :step="0.05"
+                :max="0.99"
+                :step="0.01"
+                :step-strictly="false"
                 controls-position="right"
             >
             </el-input-number>
           </el-row>
 
 
-      <div style="margin-top: 5px"> </div>
+          <div style="margin-top: 5px"></div>
 
           <el-row>
             <el-select filterable style="width: 300px" v-model="currentRule" placeholder="请选择厨神计算器">
@@ -106,7 +107,7 @@
           <el-row>
             <el-button @click="reloadGameData">加载游戏数据</el-button>
           </el-row>
-          <div  style="text-align: left">
+          <div style="text-align: left">
             说明: [加载游戏数据] 是从图鉴网拿最新的厨师，菜谱等数据。只需要在图鉴网数据更新后重新加载一次即可。
           </div>
 
@@ -133,18 +134,18 @@
 
         </el-tab-pane>
         <el-tab-pane label="说明">
-         <div>
-           奖励倍数取自白采菊花
-           <br/>
-           游戏数据取自图鉴网
-           <br/>
-           只是为了能拿到高保
-           <br/>
-           已考虑: 厨师修炼,菜谱专精,导入数据中厨师佩戴的厨具
-           <br/>
-           不考虑: 调料,心法盘,光环技能(如李清凝,兰飞鸿，二郎神,贝多分等)
-           <br/>
-         </div>
+          <div>
+            奖励倍数取自白采菊花
+            <br/>
+            游戏数据取自图鉴网
+            <br/>
+            只是为了能拿到高保
+            <br/>
+            已考虑: 厨师修炼,菜谱专精,导入数据中厨师佩戴的厨具
+            <br/>
+            不考虑: 调料,心法盘,光环技能(如李清凝,兰飞鸿，二郎神,贝多分等)
+            <br/>
+          </div>
         </el-tab-pane>
 
       </el-tabs>
@@ -159,15 +160,20 @@
 
 import {ElNotification} from 'element-plus'
 
-import {CalConfig} from './core/bundle.js'
+import {CalConfig} from './core/core.js'
 import {parseData, Task} from './core/task.js'
 
-
+import { markRaw ,toRaw} from 'vue';
 
 export default {
   data() {
+    // 获取URL参数
+    const urlParams = new URLSearchParams(window.location.search);
+    const useAll = urlParams.get('useAll') === 'true';
     return {
-      calConfig: new CalConfig([0, 10, 10, 8, 8, 8, 8, 8, 10, 30],100, 5, 0.95, false, false),
+      //http://localhost:5173/jisuanqi-zgf?useAll=true
+      //如果存在useAll参数，并且为true则CalConfig中useAll为true
+      calConfig: new CalConfig([0, 10, 10, 8, 8, 8, 8, 8, 10, 30], 100, 5, 0.95, true, true),
       percentage: 0,
       showPercentage: false,
       dataCode: '',
@@ -201,8 +207,8 @@ export default {
       this.topScore = null;
       let {officialGameData, myGameData} = await this.loadData();
 
-      if ( myGameData == null || officialGameData == null) {
-        this.errorNotify( '无法计算','缺少数据，需要从官方导入个人数据','error');
+      if (myGameData == null || officialGameData == null) {
+        this.errorNotify('无法计算', '缺少数据，需要从官方导入个人数据', 'error');
         return;
       }
       this.percentage = 0;
@@ -212,20 +218,20 @@ export default {
         // 挑选本周规则，还是历史规则
         console.log('获取厨神规则...')
         if (this.currentRule === -1) {
-          ruleStr = this.curWeekRule;
+          ruleStr = toRaw(this.curWeekRule);
         } else {
-          ruleStr = await this.getRule(this.currentRule);
+          ruleStr = markRaw(await this.getRule(this.currentRule));
         }
-      }catch (e) {
+      } catch (e) {
       }
-      if (ruleStr==null){
-        this.errorNotify( '获取规则失败','','error');
+      if (ruleStr == null) {
+        this.errorNotify('获取规则失败', '', 'error');
         return null;
       }
 
       let topResult = await Task.main(officialGameData, myGameData, ruleStr, this.calConfig);
       if (topResult == null) {
-        this.errorNotify( '无法计算','规则不符合预期','error');
+        this.errorNotify('无法计算', '规则不符合预期', 'error');
         this.deleteRule(this.currentRule);
       }
       //讲规则缓存起来，下次服用
@@ -235,7 +241,7 @@ export default {
       this.topChefs = topResult[0].chefs
       this.topScore = topResult[0].score
     },
-    errorNotify(title,message,error){
+    errorNotify(title, message, error) {
       ElNotification({
         title: title,
         message: message,
@@ -324,10 +330,10 @@ export default {
     async saveRecipesAndChefsData() {
       let data = await this.loadMyData(this.dataCode);
       if (data != null && data !== '' && data !== '数据过期') {
-        this.errorNotify( '加载成功','加载个人成功','success');
+        this.errorNotify('加载成功', '加载个人成功', 'success');
         localStorage.setItem('myGameData', JSON.stringify(data))
       } else {
-        this.errorNotify( '加载失败',data,'error');
+        this.errorNotify('加载失败', data, 'error');
       }
     },
     async getOfficeGameData() {
@@ -346,7 +352,7 @@ export default {
       let data = await (await fetch(`https://foodgame.github.io/data/data.min.json?v=${new Date().getTime()}`)).json();
       let dateStr = JSON.stringify(data);
       localStorage.setItem('gameData', dateStr)
-      this.errorNotify( '加载成功','加载游戏数据成功','success');
+      this.errorNotify('加载成功', '加载游戏数据成功', 'success');
       return dateStr;
     },
     cardClick(event) {

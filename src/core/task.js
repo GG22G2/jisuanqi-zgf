@@ -1,19 +1,19 @@
-import {GodInference, OfficialGameData, MyGameData, Calculator} from './bundle.js'
+import {GodInference, OfficialGameData, MyGameData, Calculator} from './core.js'
 
 
 class Task {
     static main(officialGameData, myGameData, ruleStr, config) {
 
         let rule = parseRule(officialGameData, ruleStr)
-        if (rule==null){
+        if (rule == null) {
             return null;
         }
-      //  Task.questParse(officialGameData)
-       // yanhui(officialGameData)
-         let TopResult = Task.defaultTask(officialGameData, myGameData, rule, config);
+        //  Task.questParse(officialGameData)
+        // yanhui(officialGameData)
+        let TopResult = Task.defaultTask(officialGameData, myGameData, rule, config);
         //let TopResult = Task.testTask(officialGameData, myGameData);
-         return TopResult;
-       // Task.maxGood(officialGameData, myGameData)
+        return TopResult;
+        // Task.maxGood(officialGameData, myGameData)
         //App.testTask(officialGameData, myGameData);
     }
 
@@ -21,10 +21,9 @@ class Task {
         const recipeReward = rule.recipeReward;
         const materialCount = rule.materialCount;
         let sexReward = rule.sexReward;
-        const inference = new GodInference(officialGameData, myGameData, recipeReward, sexReward, materialCount,calConfig);
+        const inference = new GodInference(officialGameData, myGameData, recipeReward, sexReward, materialCount, calConfig);
         return inference.refer();
     }
-
 
 
     static testTask(officialGameData, myGameData, calConfig) {
@@ -36,7 +35,7 @@ class Task {
         return inference.refer();
     }
 
-    static questParse(officialGameData){
+    static questParse(officialGameData) {
 
         //officialGameData.recipes
         const recipesNames = new Set(officialGameData.recipes.map(obj => obj.name));
@@ -48,17 +47,15 @@ class Task {
         // 请给每个任务用对象描述，包含技法限制，星级要求，稀有度要求，价格要求，食材要求，菜谱要求等，如果某一项没有对应要求，则生成出来的对象中不用体现
 
 
-
-
-        console.log(recipesNames,chefsNames,materialNames)
+        console.log(recipesNames, chefsNames, materialNames)
         //稀有度
         let rank = 0;
         //菜谱星级
         let rarity = 0;
         //制作份数
-        let count = 0 ;
+        let count = 0;
         //材料消耗
-        let materialCount = 0 ;
+        let materialCount = 0;
         //累计开业时长
         let time = 0;
         //是累计开业还是一次性开业
@@ -67,66 +64,61 @@ class Task {
         let material = 0;
         const regex = /\d*份/;
 
-        let fenci = ['制作','使用','和','的','']
+        let fenci = ['制作', '使用', '和', '的', '']
 
-        let goals= []
+        let goals = []
 
-        let quests =  officialGameData.quests;
+        let quests = officialGameData.quests;
         for (let quest of quests) {
-            if (quest.type === '主线任务'){
-                let goal  = quest.goal;
+            if (quest.type === '主线任务') {
+                let goal = quest.goal;
 
-                if (quest.questId<310){
+                if (quest.questId < 310) {
                     continue
                 }
-               // console.log(goal.match(regex))
-                if (goal.indexOf('提交')!==-1){
+                // console.log(goal.match(regex))
+                if (goal.indexOf('提交') !== -1) {
                     //  console.log(quest,goal)
-                } else if (goal.indexOf('探索')!==-1){
+                } else if (goal.indexOf('探索') !== -1) {
                     //  console.log(quest,goal)
-                } else if (goal.indexOf('拥有')!==-1){
-                  //  console.log(quest,goal)
-                } else if(goal.indexOf('研发')!==-1) {
+                } else if (goal.indexOf('拥有') !== -1) {
                     //  console.log(quest,goal)
-                }  else if(goal.indexOf('遇见')!==-1){
+                } else if (goal.indexOf('研发') !== -1) {
+                    //  console.log(quest,goal)
+                } else if (goal.indexOf('遇见') !== -1) {
                     //   console.log(quest,goal)
-                }else if (goal.indexOf('集市')!==-1){
+                } else if (goal.indexOf('集市') !== -1) {
                     // console.log(quest)
-                } else if (goal.indexOf('升级')!==-1){
+                } else if (goal.indexOf('升级') !== -1) {
                     //   console.log(quest)
-                }  else if (goal.indexOf('收集')!==-1){
-                   //    console.log(quest,goal)
-                }
-                else if(goal.indexOf('制作使用')!==-1){
+                } else if (goal.indexOf('收集') !== -1) {
+                    //    console.log(quest,goal)
+                } else if (goal.indexOf('制作使用') !== -1) {
                     goals.push(goal)
-                 //   console.log(quest,goal)
-                } else if(goal.indexOf('制作')!==-1){
-                   //   console.log(quest,goal)
+                    //   console.log(quest,goal)
+                } else if (goal.indexOf('制作') !== -1) {
+                    //   console.log(quest,goal)
                     goals.push(goal)
-                }else if (goal.indexOf('使用')!==-1){
+                } else if (goal.indexOf('使用') !== -1) {
                     goals.push(goal)
                     // 使用材料xxx个
                     // 制作 使用xxx的料理 xxx份
                     // 其他情况
                     //  console.log(quest,goal)
-                }
-                else if (goal.indexOf('经营')!==-1 || goal.indexOf('开业')!==-1){
-                 //  console.log(quest)
-                }
-                else if (goal.indexOf('获得')!==-1){
+                } else if (goal.indexOf('经营') !== -1 || goal.indexOf('开业') !== -1) {
+                    //  console.log(quest)
+                } else if (goal.indexOf('获得') !== -1) {
                     //   console.log(quest)
-                }
-
-                else{
+                } else {
                     console.log('没解析的任务')
-                    console.log(quest,goal)
+                    console.log(quest, goal)
                 }
 
             }
 
         }
-        console.log(goals.slice(0,50))
-        console.log(  JSON.stringify(goals.slice(0,50)))
+        console.log(goals.slice(0, 50))
+        console.log(JSON.stringify(goals.slice(0, 50)))
     }
 
     static maxGood(officialGameData, myGameData, calConfig) {
@@ -147,11 +139,11 @@ class Task {
                         // console.log(ownRecipe)
                         let seconds = ownRecipe.time;
                         let hourPrice = singlePrice * 60 * 60 / seconds;
-                        if (ownRecipe.name==='雪景球蛋糕'){
-                           // console.log(ownChef.name,ownRecipe.name,hourPrice)
+                        if (ownRecipe.name === '雪景球蛋糕') {
+                            // console.log(ownChef.name,ownRecipe.name,hourPrice)
                         }
-                        if (hourPrice>50000){
-                            console.log(ownChef.name,ownRecipe.name,hourPrice)
+                        if (hourPrice > 50000) {
+                            console.log(ownChef.name, ownRecipe.name, hourPrice)
 
                             //计算11 或22小时版本采集下，一个小时消耗的食材等效的采集耗时
 
@@ -223,7 +215,7 @@ class Task {
                     break;
                 case 'CreateBuff':
                     //创建全局buffer  buffer一般是下一阶段或者两阶段  符合条件的都加百分比售价
-                  //  console.log(intent)
+                    //  console.log(intent)
                     break;
                 case 'SetSatietyValue':
                     //修改某个符合条件的菜谱的饱腹感为固定值
@@ -231,7 +223,6 @@ class Task {
                     break;
             }
         }
-
 
 
         let et2 = new Set();
@@ -285,7 +276,6 @@ class Task {
          * */
 
 
-
         /**
          *
          * 模拟跟据规则上菜
@@ -299,41 +289,40 @@ class Task {
          *
          * */
 
-        let intentId  =[[173, 184, 195, 35], [214, 223, 233, 240], [157, 145, 35, 273]]
+        let intentId = [[173, 184, 195, 35], [214, 223, 233, 240], [157, 145, 35, 273]]
 
 
         let intentHashMap = officialGameData.intentHashMap;
         for (const id of intentId[0]) {
             let intent = intentHashMap.get(id);
 
-                //console.log(intent.effectType)
-                switch (intent.effectType) {
-                    case 'IntentAdd':
-                        //本道料理意图生效次数加一  如果这个菜谱有多个生效意图，就是这些意图每一个就增加一次
-                        //console.log(intent)
-                        break;
-                    case 'PriceChangePercent':
-                        //本道料理售价 加或者减百分比
-                        // console.log(intent)
-                        break;
-                    case 'BasicPriceChangePercent':
-                        //本道料理基础售价增加百分比  比如 +100%
-                        //console.log(intent)
-                        break;
-                    case 'CreateIntent':
-                        //创建一个新的intent，则个intent是作用于下一道料理的(暂时不知道能不能跨阶段)
-                        //   console.log(intent)
-                        break;
-                    case 'BasicPriceChange':
-                        //基础售价增加   比如+100
-                        //console.log(intent)
-                        break;
-                    case 'CreateBuff':
-                        //创建全局buffer  buffer一般是下一阶段或者两阶段  符合条件的都加百分比售价
-                        //  console.log(intent)
-                        break;
-                }
-
+            //console.log(intent.effectType)
+            switch (intent.effectType) {
+                case 'IntentAdd':
+                    //本道料理意图生效次数加一  如果这个菜谱有多个生效意图，就是这些意图每一个就增加一次
+                    //console.log(intent)
+                    break;
+                case 'PriceChangePercent':
+                    //本道料理售价 加或者减百分比
+                    // console.log(intent)
+                    break;
+                case 'BasicPriceChangePercent':
+                    //本道料理基础售价增加百分比  比如 +100%
+                    //console.log(intent)
+                    break;
+                case 'CreateIntent':
+                    //创建一个新的intent，则个intent是作用于下一道料理的(暂时不知道能不能跨阶段)
+                    //   console.log(intent)
+                    break;
+                case 'BasicPriceChange':
+                    //基础售价增加   比如+100
+                    //console.log(intent)
+                    break;
+                case 'CreateBuff':
+                    //创建全局buffer  buffer一般是下一阶段或者两阶段  符合条件的都加百分比售价
+                    //  console.log(intent)
+                    break;
+            }
 
 
         }
@@ -355,20 +344,14 @@ function autoxjsTask(topChef) {
 
 
 function parseData(gameData, myGameData, calConfig) {
-    if (calConfig.addBaseValue > 0) {
-        //todo 需要将厨师的4维增加 addBaseValue，
-        let chefs = gameData.chefs;
-        let chefs2 = []
-        for (const chef of chefs) {
-            if (chef.rarity > 3) {
-                let chefs1 = generateChefs(chef, calConfig.addBaseValue);
-                for (let chefs1Element of chefs1) {
-                    chefs2.push(chefs1Element);
-                }
-            }
-            chefs2.push(chef)
-        }
-        gameData.chefs = chefs2;
+
+    let recipes = gameData.recipes;
+    //将菜谱id重新映射成紧凑的id列表
+    let recipeIdMap = new Map();
+    for (let i = 0; i < recipes.length; i++) {
+        let recipe = recipes[i];
+        recipeIdMap.set(recipe.recipeId, i);
+        recipe.recipeId = i;
     }
 
     let officialGameData = new OfficialGameData();
@@ -381,7 +364,7 @@ function parseData(gameData, myGameData, calConfig) {
     officialGameData.quests = gameData.quests
     officialGameData.buffs = gameData.buffs
     officialGameData.intents = gameData.intents
-
+    officialGameData.recipeIdMap = recipeIdMap;
     officialGameData.buildMap();
     officialGameData.buildMaterialFeature();
 
@@ -389,20 +372,18 @@ function parseData(gameData, myGameData, calConfig) {
 
     return {
         officialGameData: officialGameData,
-        myGameData: importChefsAndRecipesFromFoodGame(officialGameData, myGameData, calConfig)
+        myGameData: importChefsAndRecipesFromFoodGame(officialGameData, myGameData, calConfig, recipeIdMap)
     }
 }
-
-
 
 
 /**
  * @param allChef 全厨师，并且全修炼
  * @param allRecipe 全菜谱并且全专精
  * */
-function  modifyMyData(foodGameData,allChef,allRecipe){
+function modifyMyData(foodGameData, allChef, allRecipe) {
 
-    if (allRecipe){
+    if (allRecipe) {
         let recipes = foodGameData.recipes;
         for (const recipe of recipes) {
             recipe.ex = '是'
@@ -410,7 +391,7 @@ function  modifyMyData(foodGameData,allChef,allRecipe){
         }
     }
 
-    if (allChef){
+    if (allChef) {
         let chefs = foodGameData.chefs;
         for (const chef of chefs) {
             chef.got = '是'
@@ -423,10 +404,10 @@ function  modifyMyData(foodGameData,allChef,allRecipe){
 
 
 //从图鉴网导入数据
-function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calConfig) {
+function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calConfig, recipeIdMap) {
 
-    if (calConfig.useAll){
-        modifyMyData(foodGameData,true,true)
+    if (calConfig.useAll) {
+        modifyMyData(foodGameData, true, true)
     }
 
 
@@ -438,6 +419,11 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calCo
         let jsonRecipe = recipes[i];
         let id = jsonRecipe.id;
         if (jsonRecipe.got === "是") {
+            if (recipeIdMap != null) {
+                if (recipeIdMap.get(id) != null) {
+                    id = recipeIdMap.get(id);
+                }
+            }
             let recipe = officialGameData.recipeHashMap.get(id);
             if (recipe != null) {
                 if (jsonRecipe.ex === "是") {
@@ -447,6 +433,7 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calCo
             }
         }
     }
+    console.log("菜谱数量", myGameData.recipes.length)
 
     //厨师
     let chefs = foodGameData.chefs;
@@ -467,6 +454,7 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calCo
             if (jsonChef.equip != null) {
                 let equip = officialGameData.equipHashMap.get(jsonChef.equip);
                 chef.selfEquipSkillIds = equip.skill
+                chef.remark = equip.name
             }
 
             // if (jsonChef.ambers!= null){
@@ -549,61 +537,6 @@ function generateChefIds(chef, appendValue) {
     return chefIds;
 }
 
-function generateChefs(chef, appendValue) {
-    let chefs = [];
-    let newChef;
-
-    if (chef.bake !== 0) {
-        newChef = cloneChef(chef);
-        newChef.bake += appendValue;
-        newChef.chefId = (1 << 28 | (appendValue << 12) | chef.chefId);
-        chefs.push(newChef);
-        newChef.remark = "烤 " + appendValue;
-    }
-
-    if (chef.boil !== 0) {
-        newChef = cloneChef(chef);
-        newChef.boil += appendValue;
-        newChef.chefId = (2 << 28 | (appendValue << 12) | chef.chefId);
-        chefs.push(newChef);
-        newChef.remark = "煮 " + appendValue;
-    }
-
-    if (chef.stirfry !== 0) {
-        newChef = cloneChef(chef);
-        newChef.stirfry += appendValue;
-        newChef.chefId = (3 << 28 | (appendValue << 12) | chef.chefId);
-        chefs.push(newChef);
-        newChef.remark = "炒 " + appendValue;
-    }
-
-    if (chef.knife !== 0) {
-        newChef = cloneChef(chef);
-        newChef.knife += appendValue;
-        newChef.chefId = (4 << 28 | (appendValue << 12) | chef.chefId);
-        chefs.push(newChef);
-        newChef.remark = "切 " + appendValue;
-    }
-
-    if (chef.fry !== 0) {
-        newChef = cloneChef(chef);
-        newChef.fry += appendValue;
-        newChef.chefId = (5 << 28 | (appendValue << 12) | chef.chefId);
-        chefs.push(newChef);
-        newChef.remark = "炸 " + appendValue;
-    }
-
-    if (chef.steam !== 0) {
-        newChef = cloneChef(chef);
-        newChef.steam += appendValue;
-        newChef.chefId = (6 << 28 | (appendValue << 12) | chef.chefId);
-        chefs.push(newChef);
-        newChef.remark = "蒸 " + appendValue;
-    }
-
-    return chefs;
-}
-
 
 function cloneChef(chef) {
     let chef1 = Object.create(chef);
@@ -620,7 +553,8 @@ function cloneChef(chef) {
  *
  * */
 function parseRule(officialGameData, jsonObjectRule) {
-    let recipeReward = new Array(10000).fill(-1000)
+    let recipeIdMap = officialGameData.recipeIdMap;
+    let recipeReward = new Array(officialGameData.recipes.length+1).fill(-1000)
     let materialCount = new Array(47);
     let sexReward = [0.0, 0.0]
     let recipes = officialGameData.recipes
@@ -635,8 +569,15 @@ function parseRule(officialGameData, jsonObjectRule) {
             if (rule.RecipeEffect) {
                 let recipeEffect = rule.RecipeEffect;
                 for (let key in recipeEffect) {
-                    recipeReward[key] = recipeEffect[key]
+                    let recipeId = parseInt(key);
+                    if (recipeIdMap.size > 0) {
+                        //奖励倍数的id做一下映射
+                        recipeId = recipeIdMap.get(recipeId);
+                    }
+                    recipeReward[recipeId] = recipeEffect[key]
                 }
+
+
             } else {
                 recipeReward = recipeReward.fill(0)
                 //console.log('没有奖励倍数', rule)
@@ -710,7 +651,7 @@ function parseRule(officialGameData, jsonObjectRule) {
             break;
         }
     }
-    if (!hasMatchRule){
+    if (!hasMatchRule) {
         return null
     }
 
