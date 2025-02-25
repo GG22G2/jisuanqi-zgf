@@ -366,15 +366,15 @@ class GodInference {
         const ints = maxScoreResult.permuation;
         const recipes = [0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-        recipes[0] = precipes[ints[0]];
-        recipes[1] = precipes[ints[1]];
-        recipes[2] = precipes[ints[2]];
-        recipes[3] = precipes[ints[3]];
-        recipes[4] = precipes[ints[4]];
-        recipes[5] = precipes[ints[5]];
-        recipes[6] = precipes[ints[6]];
-        recipes[7] = precipes[ints[7]];
-        recipes[8] = precipes[ints[8]];
+        recipes[0] = precipes[0];
+        recipes[1] = precipes[1];
+        recipes[2] = precipes[2];
+        recipes[3] = precipes[3];
+        recipes[4] = precipes[4];
+        recipes[5] = precipes[5];
+        recipes[6] = precipes[6];
+        recipes[7] = precipes[7];
+        recipes[8] = precipes[8];
 
         const chefs = maxScoreResult.maxScoreChefGroup;
 
