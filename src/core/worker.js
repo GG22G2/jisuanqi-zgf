@@ -99,9 +99,9 @@ class ChefAndRecipeThread {
             score2Index = playRecipes[t + 3] * r2 + playRecipes[t + 4] * recipeCount + playRecipes[t + 5];
             score3Index = playRecipes[t + 6] * r2 + playRecipes[t + 7] * recipeCount + playRecipes[t + 8];
 
-            score1Index = score1Index * 3;
-            score2Index = score2Index * 3;
-            score3Index = score3Index * 3;
+            score1Index = score1Index * 6;
+            score2Index = score2Index * 6;
+            score3Index = score3Index * 6;
 
             //给每个厨师生成一个条件码，这里判断如果符合条件，则进入光环技能判断流程。
             //比如刘昂星如果有 兰飞鸿的技能，则兰飞鸿必须在场，特殊技能的厨师生成一个特殊的标识，这里做一次匹配
@@ -124,17 +124,17 @@ class ChefAndRecipeThread {
                             //console.log("全遍历得到最大分")
                             if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
 
-                                if (c1>2||c2>2||c3>2){
-                                    debugger
-                                }
+                                // if (c1>2||c2>2||c3>2){
+                                //     debugger
+                                // }
                                 //特征比较
                                 let mm1 = chefMatchMasks[realChef1];
                                 let mm2 = chefMatchMasks[realChef2];
                                 let mm3 = chefMatchMasks[realChef3];
 
-                                if (realChef2===116){
-                                    debugger
-                                }
+                                // if (realChef2===116){
+                                //     debugger
+                                // }
                                 if ((mm1 + mm2 + mm3) !== 0) {
                                     //有特殊要求，需要具体计算
                                     let m1 = chefMasks[realChef1];
@@ -213,7 +213,8 @@ class ChefAndRecipeThread {
             for (let j = i + 1; j < recipeCount; j++) {
                 for (let k = j + 1; k < recipeCount; k++) {
                     index = i * r2 + j * recipeCount + k;
-                    index = index *  (3+ownPresenceChefCount);
+                    index = index *  (3 + ownPresenceChefCount);
+                    //debugger
                     //每一组菜谱组合，计算得分最高的3个厨师
                     let a = 0, b = 0, c = 0, ai = 0, bi = 0, ci = 0;
                     let tAdd = 0;
@@ -269,7 +270,7 @@ class ChefAndRecipeThread {
                     groupMaxScore[index + 1] = b
                     groupMaxScore[index + 2] = c
 
-                    debugger
+                   // debugger
                     //todo 遍历在场生效厨师 ，生产对应结果
 
                     for (let r1 = 0; r1 < ownPresenceChefCount; r1++) {
@@ -290,7 +291,7 @@ class ChefAndRecipeThread {
                             }
                         }
                         tAdd = end;
-                        debugger
+                       // debugger
                         let chefScoreIndex = index + 3 + r1;
                         groupMaxScoreChefIndex[chefScoreIndex] = maxT;
                         groupMaxScore[chefScoreIndex] = maxNum
