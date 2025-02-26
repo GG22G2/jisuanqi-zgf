@@ -105,6 +105,31 @@ class ChefAndRecipeThread {
                 let realChef2 = chefRealIndex[chef2];
                 let realChef3 = chefRealIndex[chef3];
 
+                //给每个厨师生成一个条件码，这里判断如果符合条件，则进入光环技能判断流程。
+
+                //比如刘昂星如果有 兰飞鸿的技能，则兰飞鸿必须在场，特殊技能的厨师生成一个特殊的标识，这里做一次匹配
+
+                /**
+                 *
+                 *
+                 *
+                 *
+                 * 特征用bigint保存
+                 * 比如无光环技能的值未0b1
+                 * 有兰飞鸿技能的未0b01;
+                 * 有南飞技能的为 0b10;
+                 * 同时有兰飞鸿和南飞的为 0b11;
+                 *
+                 *
+                 * 厨师b和c的特征做与运算 结果为 p1
+                 * p1和 0b11做与运算，如果结果不为0b11则认为不满足条件，不往下继续进行。
+                 *
+                 *
+                 * 厨师在场就生效的
+                 * 厨师不仅要在场，还要满足其他条件的，
+                 *
+                 *
+                 * */
                 if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
 
                     maxScore = score;
@@ -152,16 +177,16 @@ class ChefAndRecipeThread {
     }
 
     calAllCache(scoreCache, amberPrice, recipeCount, playChefCount, ownChefCount, chefEquipCount) {
-        console.log(chefEquipCount)
+        //console.log(chefEquipCount)
         let maxIndex = recipeCount * recipeCount * recipeCount;
 
-        console.log(`菜谱组合 ${maxIndex}`)
+        //console.log(`菜谱组合 ${maxIndex}`)
 
         const groupMaxScore = new Int32Array(maxIndex * 3);
         const groupMaxScoreChefIndex = new Int32Array(maxIndex * 3)
         const chefRealIndex = new Int32Array(playChefCount)
 
-        console.time("计算菜谱组合最高3个得分")
+        console.time("计算每三道菜最高得分的厨师")
 
         let tAdd = 0;
         for (let r = 0; r < ownChefCount; r++) {
@@ -172,11 +197,12 @@ class ChefAndRecipeThread {
             }
             tAdd = end;
         }
+        const r2 = recipeCount * recipeCount;
         let index = 0;
         for (let i = 0; i < recipeCount; i++) {
             for (let j = i + 1; j < recipeCount; j++) {
                 for (let k = j + 1; k < recipeCount; k++) {
-                    index = i * recipeCount * recipeCount + j * recipeCount + k;
+                    index = i * r2 + j * recipeCount + k;
                     index = index * 3;
                     //每一组菜谱组合，计算得分最高的3个厨师
                     let a = 0, b = 0, c = 0, ai = 0, bi = 0, ci = 0;
@@ -207,7 +233,6 @@ class ChefAndRecipeThread {
                                     maxT = t;
                                 }
                             }
-                            //chefRealIndex[start]
                         }
                         tAdd = end;
 
@@ -231,6 +256,8 @@ class ChefAndRecipeThread {
                         }
                     }
 
+                    //前三个排名的厨师 不能带有全局加成技法。 从第四个开始才能带。
+
                     //todo 这里 a b c可能是同一个厨师带不同厨具
 
                     groupMaxScoreChefIndex[index] = ai;
@@ -249,7 +276,7 @@ class ChefAndRecipeThread {
 
         }
 
-        console.timeEnd("计算菜谱组合最高3个得分")
+        console.timeEnd("计算每三道菜最高得分的厨师")
 
         return {
             groupMaxScore, groupMaxScoreChefIndex, chefRealIndex
