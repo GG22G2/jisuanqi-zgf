@@ -1,9 +1,21 @@
 /* Generated from Java with JSweet 3.0.0 - http://www.jsweet.org */
 import {ChefAndRecipeThread} from './calThread.js'
-import {PlayChef,PlayRecipe, SkillEffect,TempAddition,TopResult,CalRecipe,Chef,Effect,Recipe,Skill} from './ObjectDesc.js'
-import {GlobalAddition } from './globalAddition.js'
-import { Calculator } from './calculator.js'
+import {
+    PlayChef,
+    PlayRecipe,
+    SkillEffect,
+    TempAddition,
+    TopResult,
+    CalRecipe,
+    Chef,
+    Effect,
+    Recipe,
+    Skill
+} from './ObjectDesc.js'
+import {GlobalAddition} from './globalAddition.js'
+import {Calculator} from './calculator.js'
 import {IngredientLimit} from "./ingredientLimit.js";
+import {cloneObject} from "./utils.js";
 
 
 class GodInference {
@@ -21,12 +33,19 @@ class GodInference {
 
         //拥有的厨师，菜谱，厨具
         this.ownChefs = null;
+
+        //在场生效厨师
+        this.presenceChefs = null;
+
         this.ownRecipes = null;
         this.ownEquips = null;
 
         this.tempOwnRecipes = null;
 
-        this.playChefs = []; //上场厨师
+
+        this.playChefs = []; //上场厨师（不受其他厨师影响）
+        this.playPresenceChefs = []; //上场厨师（在场生效厨师）
+
         this.playRecipeGroup = []; //上场菜谱组合(每一个都是9个菜谱)
         this.playRecipes = []; //上场菜谱(菜谱和数量)
         this.playEquips = []; //上场厨具
@@ -50,11 +69,10 @@ class GodInference {
 
         //将全局技法加成 追加到厨师技法上
         GodInference.modifyChefValue(this.ownChefs, this.globalAddtion);
-
+        GodInference.modifyChefValue(this.presenceChefs, this.globalAddtion);
         this.buildRecipeTags();
 
     }
-
 
 
     /**
@@ -103,16 +121,19 @@ class GodInference {
             recipeCount: this.tempCalCache.recipeCount,
             playChefCount: this.tempCalCache.playChefs.length,
             ownChefCount: this.ownChefs.length,
-            chefEquipCount: this.tempCalCache.chefEquipCount
+            playPresenceChefCount: this.tempCalCache.playPresenceChefs.length,
+            presenceChefCount: this.presenceChefs.length,
+            chefEquipCount: this.tempCalCache.chefEquipCount,
+            chefMasks: this.tempCalCache.chefMasks,
+            chefMatchMasks: this.tempCalCache.chefMatchMasks
         }
-        //debugger
+
 
         //不同区段的实际计算量是不同的, 计算一般集中的前半部分
         let startIndex = 0, limit = Math.min(300000, total);
         let sendCount = Math.ceil(total / limit);
         let resultCount = 0;
 
-        let totalP = sendCount * 100;
 
         return new Promise(resolve => {
             for (let i = 0; i < groupNum; i++) {
@@ -206,9 +227,14 @@ class GodInference {
     buildCache() {
         this.buildPlayRecipe();
         const builder = new TempCalCacheBuilder();
-        this.tempCalCache = builder.build(this.ownChefs, this.playRecipes, this.useEquip ? this.playEquips : [], this.officialGameData
+
+        this.tempCalCache = builder.build(this.ownChefs,this.presenceChefs, this.playRecipes, this.useEquip ? this.playEquips : [], this.officialGameData
             , this.globalAddtion, this.recipeReward, this.sexReward);
+
+
+
         this.playChefs = this.tempCalCache.playChefs
+        this.playPresenceChefs = this.tempCalCache.playPresenceChefs
     }
 
 
@@ -397,6 +423,12 @@ class GodInference {
         let chefs = [];
         for (let i = 0; i < 3; i++) {
             let ownChef = this.playChefs[chefIds[i]];
+
+            if (ownChef==null){
+                ownChef = this.playPresenceChefs[chefIds[i] - this.playChefs.length];
+            }
+
+
             let name1 = this.playRecipes[recipeIds[(i * 3)]].name;
             let count1 = this.playRecipes[recipeIds[(i * 3)]].count;
             let name2 = this.playRecipes[recipeIds[(i * 3) + 1]].name;
@@ -422,7 +454,6 @@ class GodInference {
 
         return [result]
     }
-
 
 
     /**
@@ -536,11 +567,62 @@ class GodInference {
 
     initOwn() {
         const chefs = [];
-        this.ownChefs = this.myGameData.chefs.filter((chef) => {
-            return this.mustChefs.indexOf(chef.name)!==-1 || chef.rarity >= this.chefMinRarity;
+        let ownChefs = this.myGameData.chefs.filter((chef) => {
+            return this.mustChefs.indexOf(chef.name) !== -1 || chef.rarity >= this.chefMinRarity;
         }).sort((chef, chef2) => {
             return chef.chefId - chef2.chefId;
         });
+
+        let presenceChefs = [];
+       // let partialSkillChef = ['兰飞鸿','露西','美乐蒂'];
+        let partialSkillChef = ['兰飞鸿'];
+        for (const ownChef of ownChefs) {
+            if (partialSkillChef.indexOf(ownChef.name) === -1) {
+                continue
+            }
+            let chefList = createPartialSkillChef(this.officialGameData, ownChef, ownChefs)
+            console.log("在场生效技能，扩展厨师", chefList)
+            //新生成的厨师要做出来
+
+
+            presenceChefs.push(...chefList)
+        }
+
+        for (const ownChef of ownChefs) {
+            buildChefSkillEffect(this.officialGameData, ownChef);
+        }
+        for (const ownChef of presenceChefs) {
+            buildChefSkillEffect(this.officialGameData, ownChef);
+        }
+
+
+        this.ownChefs = ownChefs;
+        this.presenceChefs= presenceChefs;
+
+        //70 -> 630 -> (630 * 200) -> 126000
+        //每个厨师生成一个副本
+
+        // 兰飞鸿[制作料理基础售价+30%小当家系列厨师在场时对其也生效] 小当家系列
+        // 露西[场上厨师制作神级料理基础售价+25%]
+        // 美乐蒂[场上厨师制作5火料理基础售价+450]
+        // 今珏[场上厨师制作5火料理基础售价+20%]
+
+        // 南飞[制作三种同技法料理在场基础售价+5%]
+        // 年糕[制作三种同技法料理场上炸料理售价+20%]
+        // 泉映月[制作三种同技法料理在场蒸料理基础售价+10%]
+        // 普洛妮[场上女性厨师制作蒸料理售价+30%] 女性
+        // 雨荷[场上厨师制作炒料理基础售价+35%] 炒厨师
+        // 悲歌[场上厨师制作3火料理售价+50%]
+
+        //每个厨师生成三个副本
+        // 艾琳[每制作一种神级料理场上厨师炸售价+10%]
+        // 特图图[每制作一种神级料理场上厨师蒸售价+10%]
+
+        //todo 生成副本后，需要增加校验逻辑，在计算出最大分数后，判断是否合理
+        //todo 但是问题是每组菜谱只保存最高分三个厨师， 所以会导致符合规则的组合不参与计算
+
+        // 所以不论这几个厨师的得分多少，必须在结果集中,给这几个厨师单独一套列表
+
 
         this.tempOwnRecipes = this.myGameData.recipes;
         for (let tempOwnRecipe of this.tempOwnRecipes) {
@@ -555,24 +637,14 @@ class GodInference {
 
         let skillHashMap = this.officialGameData.skillHashMap;
 
-
         //这里改成按照厨具效果过滤
         /*
         * 只要3星厨具，只要各种售价类，减少技法的一律不考虑
-        *
         * 技能的Type是以 Use 开头的都算作跟售价相关
-        *
         *  六种技法 ['Bake','Steam','Boil','Fry','Knife','Stirfry']
-        *
-        * value不能小于0
-        *
-        *
         * 只使用3星厨具， 出局效果必须能做用于厨师，
-        *
         * [基础售价的，6种口味的，6种技法，6种售价加成]
         * //或者更简单的，厨师带上出局，对前200到菜能起到价钱效果的厨具都可以保留。保留前60名厨具
-        *
-        *
         * */
 
         equips = this.officialGameData.equips;
@@ -588,47 +660,35 @@ class GodInference {
         this.ownEquips = equipTemp;
         this.playEquips = equipTemp;
 
-        for (const ownChef of this.ownChefs) {
-            buildChefSkillEffect(this.officialGameData, ownChef);
-        }
-
 
     }
-
 
 }
 
 
-
-
-
 class TempCalCache {
-    constructor(chefIndexMax, recipeIndexMax) {
+    constructor(chefCount,presenceChefCount, recipeCount) {
         this.scoreCache = null;
         this.groupMaxScore = null;
         this.groupMaxScoreChefIndex = null;
         this.groupRecipeIndex = null; //一维数组，   一组菜谱3个，这个是前两个菜谱的索引,
 
-        this.chefCount = chefIndexMax;
-        this.recipeCount = recipeIndexMax;
+
+        this.recipeCount = recipeCount;
 
         this.scoreCache = null;
-        this.amberPrice = new Int32Array(recipeIndexMax * 17);
+        this.amberPrice = new Int32Array(recipeCount * 17);
         this.groupRecipeIndex = null;
 
-
         this.playChefs = null;
-        this.playEquipChefs = null;
-        this.chefEquipCount = new Int32Array(chefIndexMax);
+        this.chefEquipCount = new Int32Array(chefCount + presenceChefCount);
     }
 }
 
 
 class TempCalCacheBuilder {
     constructor() {
-        if (this.tempCalCache === undefined) {
-            this.tempCalCache = null;
-        }
+        this.tempCalCache = null;
         this.recipeReward = null;
         this.sexReward = null;
         this.officialGameData = null;
@@ -637,105 +697,118 @@ class TempCalCacheBuilder {
         this.playRecipes = null;
     }
 
-    build(ownChefs, playRecipes, playEquips, officialGameData, globalAddition, recipeReward, sexReward) {
+    build(ownChefs,presenceChefs, playRecipes, playEquips, officialGameData, globalAddition, recipeReward, sexReward) {
         this.officialGameData = officialGameData;
-        this.globalAddtion = globalAddition;
         this.kitchenGodCal = new Calculator(globalAddition.useall, recipeReward, sexReward);
+
+        this.updateId(ownChefs,0);
+        this.updateId(presenceChefs,ownChefs.length);
+
+
         this.ownChefs = ownChefs;
-        this.updateId();
+        this.presenceChefs = presenceChefs;
+
+
+
         this.playChefs = [...ownChefs];
         this.playRecipes = playRecipes;
         this.recipeReward = recipeReward;
         this.sexReward = sexReward;
         this.playEquips = playEquips;
-        this.tempCalCache = new TempCalCache(ownChefs.length, playRecipes.length);
+
+
+
+        this.tempCalCache = new TempCalCache(ownChefs.length,presenceChefs.length, playRecipes.length);
+       // let chefEquipCount = this.tempCalCache.chefEquipCount;
+
 
         this.createCalCache();
-
         return this.tempCalCache;
     }
 
-    updateId() {
-        for (let i = 0; i < this.ownChefs.length; i++) {
-            const ownChef = this.ownChefs[i];
-            ownChef.index = i;
+    updateId(chefs,start) {
+        for (let i = 0; i < chefs.length; i++) {
+            const chef = chefs[i];
+            chef.index = start+i;
         }
+    }
+
+    createChefWithEquip(chefs,chefEquipCount,start){
+        let playRecipes = this.playRecipes;
+        let equips = this.playEquips;
+        let playEquipChefs = [];
+
+        for (let i = 0; i < chefs.length; i++) {
+            let ownChef = chefs[i];
+
+            let playRecipeCount = playRecipes.length;
+            let rawScores = new Int32Array(playRecipes.length);
+            playEquipChefs.push(ownChef)
+            for (let t = 0; t < playRecipeCount; t++) {
+                const calRecipe = playRecipes[t];
+                rawScores[t] = this.kitchenGodCal.calSinglePrice(ownChef, calRecipe) * calRecipe.count;
+            }
+
+            let equipCount = 0;
+            //let equipSet = new Set();
+            //这里给厨师分配厨具的时候， 口味都可，四种啥都可，  技法类需要和厨师适配
+            for (const equip of equips) {
+                let newPlayChef = cloneObject(ownChef);
+                newPlayChef.selfEquipSkillIds = equip.skill
+                buildChefSkillEffect(this.officialGameData, newPlayChef);
+                let equipScores = new Int32Array(playRecipes.length);
+
+                for (let t = 0; t < playRecipeCount; t++) {
+                    const calRecipe = playRecipes[t];
+                    equipScores[t] = this.kitchenGodCal.calSinglePrice(newPlayChef, calRecipe) * calRecipe.count;
+                }
+                let sum = 0;
+                //一个厨具应该能让三个菜的总分
+                for (let k = 0; k < playRecipeCount; k++) {
+                    sum = sum + (equipScores[k] - rawScores[k]);
+                }
+                if (sum > 0) {
+                    equipCount++;
+                    newPlayChef.remark = equip.name
+                    playEquipChefs.push(newPlayChef)
+                }
+            }
+            chefEquipCount[start+i] = equipCount
+        }
+        return playEquipChefs;
     }
 
     createCalCache() {
         let playRecipes = this.playRecipes;
         //这里用来修改ownChefs
-        let chefEquipCount = new Int32Array(this.ownChefs.length);
+        let chefEquipCount = this.tempCalCache.chefEquipCount;
 
         let playChefs = [...this.ownChefs]
-        let playEquipChefs = [];
+        let playPresenceChefs = [...this.presenceChefs]
+
         if (this.playEquips.length > 0) {
-            console.log("使用厨具")
-            //使用厨具，将厨师扩展一下
-            let equips = this.playEquips;
-            //每个厨师，带上所有种类厨具，和ownRecipes中菜谱计算价格
-
-            //可能使用的厨具应该是能提供可靠收益的，也就是带上厨具后做ownRecipes中菜谱能增加售价，并且增加幅度应该不低
-
-
-            for (let i = 0; i < this.ownChefs.length; i++) {
-                let ownChef = this.ownChefs[i];
-
-                let playRecipeCount = playRecipes.length;
-                let rawScores = new Int32Array(playRecipes.length);
-                playEquipChefs.push(ownChef)
-                for (let t = 0; t < playRecipeCount; t++) {
-                    const calRecipe = playRecipes[t];
-                    rawScores[t] = this.kitchenGodCal.calSinglePrice(ownChef, calRecipe) * calRecipe.count;
-                }
-
-                let equipCount = 0;
-                //let equipSet = new Set();
-                //这里给厨师分配厨具的时候， 口味都可，四种啥都可，  技法类需要和厨师适配
-                for (const equip of equips) {
-                    let newPlayChef = cloneChef(ownChef);
-                    newPlayChef.selfEquipSkillIds = equip.skill
-                    buildChefSkillEffect(this.officialGameData, newPlayChef);
-                    let equipScores = new Int32Array(playRecipes.length);
-
-                    for (let t = 0; t < playRecipeCount; t++) {
-                        const calRecipe = playRecipes[t];
-                        equipScores[t] = this.kitchenGodCal.calSinglePrice(newPlayChef, calRecipe) * calRecipe.count;
-                    }
-
-                    let sum = 0;
-                    //一个厨具应该能让三个菜的总分
-                    for (let k = 0; k < playRecipeCount; k++) {
-                        sum = sum + (equipScores[k] - rawScores[k]);
-                    }
-
-                    if (sum > 0) {
-                        equipCount++;
-                        newPlayChef.remark = equip.name
-                        playEquipChefs.push(newPlayChef)
-                    }
-                }
-                chefEquipCount[i] = equipCount
-            }
-            playChefs = playEquipChefs
+            playChefs = this.createChefWithEquip(this.ownChefs,chefEquipCount,0)
+            playPresenceChefs = this.createChefWithEquip(this.presenceChefs,chefEquipCount,this.ownChefs.length)
         }
 
 
         this.tempCalCache.playChefs = playChefs;
-        this.tempCalCache.playEquipChefs = playEquipChefs;
+        this.tempCalCache.playPresenceChefs = playPresenceChefs;
         this.tempCalCache.chefCount = playChefs.length;
-        this.tempCalCache.scoreCache = new Int32Array(playChefs.length * this.tempCalCache.recipeCount);
-        this.tempCalCache.chefEquipCount = chefEquipCount;
+        this.tempCalCache.presenceChefCount = playPresenceChefs.length;
+        this.tempCalCache.scoreCache = new Int32Array(playChefs.length * this.tempCalCache.recipeCount + playPresenceChefs.length * this.tempCalCache.recipeCount);
+
 
         console.log('上场菜谱', playRecipes)
         console.log('上场厨师', playChefs)
+
 
 
         let recipeCount = this.tempCalCache.recipeCount
         let scoreCache = this.tempCalCache.scoreCache;
 
         //各个品质对应的加成
-        for (let i = 0; i <  playChefs.length; i++) {
+        for (let i = 0; i < playChefs.length; i++) {
             const ownChef = playChefs[i];
             for (let t = 0; t < playRecipes.length; t++) {
                 const playRecipe = playRecipes[t];
@@ -744,6 +817,31 @@ class TempCalCacheBuilder {
                 scoreCache[i * recipeCount + index] = singlePrice * playRecipe.count;
             }
         }
+
+        let start = playChefs.length * recipeCount;
+        for (let i = 0; i < playPresenceChefs.length; i++) {
+            const ownChef = playPresenceChefs[i];
+            for (let t = 0; t < playRecipes.length; t++) {
+                const playRecipe = playRecipes[t];
+                const index = playRecipe.index;
+                const singlePrice = this.kitchenGodCal.calSinglePrice(ownChef, playRecipe);
+                scoreCache[start + i * recipeCount + index] = singlePrice * playRecipe.count;
+            }
+        }
+
+        let startIndex = this.ownChefs.length;
+        let chefMasks = new Uint32Array(startIndex+this.presenceChefs.length).fill(0);
+        let chefMatchMasks = new Uint32Array(startIndex+this.presenceChefs.length).fill(0);
+
+        //给厨师的mask生成对应所以
+        for (let i = 0; i < this.presenceChefs.length; i++) {
+            chefMasks[startIndex+i] = this.presenceChefs[i].mask;
+            chefMatchMasks[startIndex+i] = this.presenceChefs[i].matchMask;
+        }
+        this.tempCalCache.chefMasks = chefMasks;
+        this.tempCalCache.chefMatchMasks = chefMatchMasks;
+        //后续扩展:  生成菜谱特征， 用六个bit代表菜谱用了那些技法  这样做三个菜的时候，三个菜的特征与运算，如果不等于0就代表是三种统计法菜谱
+
 
         //todo 如果考虑遗玉，那么只考虑作用于菜谱的遗玉,一个厨师3个遗玉默认都应该是相同的，所以用三个5星同种遗玉  也就是39%的各种加成
         //在计算得分阶段就 生成17中effect 各个品质对应的加成
@@ -787,6 +885,9 @@ class TempCalCacheBuilder {
         }
 
     }
+
+
+
 }
 
 class MyGameData {
@@ -873,7 +974,7 @@ class CalConfig {
     /**
      * 计算配置，暂时只有加法额外追加的值
      * */
-    constructor(deepLimit, recipeLimit, chefMinRarity, filterScoreRate, useEquip, useAll,mustChefs) {
+    constructor(deepLimit, recipeLimit, chefMinRarity, filterScoreRate, useEquip, useAll, mustChefs) {
 
         this.deepLimit = deepLimit;   //生成菜谱时候的遍历深度
         this.recipeLimit = recipeLimit;//菜谱限制，根据厨神规则排序菜谱，只是用前recipeLimit个菜
@@ -891,12 +992,126 @@ function setBit(m, pos) {
     return m | BigInt(1) << BigInt(pos);
 }
 
+// 兰飞鸿[制作料理基础售价+30%小当家系列厨师在场时对其也生效] 小当家系列
+// 露西[场上厨师制作神级料理基础售价+25%]
+// 美乐蒂[场上厨师制作5火料理基础售价+450]
+// 今珏[场上厨师制作5火料理基础售价+20%]
+//
+// 南飞[制作三种同技法料理在场基础售价+5%]
+// 年糕[制作三种同技法料理场上炸料理售价+20%]
+// 泉映月[制作三种同技法料理在场蒸料理基础售价+10%]
+// 普洛妮[场上女性厨师制作蒸料理售价+30%] 女性
+// 雨荷[场上厨师制作炒料理基础售价+35%] 炒厨师
+// 悲歌[场上厨师制作3火料理售价+50%]
+
+
+// 艾琳和特图图先不考虑了
+// 艾琳[每制作一种神级料理场上厨师炸售价+10%]
+// 特图图[每制作一种神级料理场上厨师蒸售价+10%]
+
+
+/**
+ * 特征分类归纳 在场，在场 制作三种同技法料理，
+ * BigUint64Array保存
+ *
+ *
+ * 12个bit用于代表谁在场
+ *
+ *
+ * 1bit代表是否三个菜同技法
+ * 3bit代表自己做的神料理数量 0：000  1：001  2：010  3：100
+ *
+ *
+ *
+ * */
+
+
+function createPartialSkillChef(officialGameData, chef, ownChefs) {
+    let chefMask = {
+        '兰飞鸿': 0b01
+    }
+    let chefName = chef.name;
+    let mask = chefMask[chefName];
+
+
+    let partialChefs = []
+    let cloneChef = cloneObject(chef);
+    cloneChef.mask = mask;
+    cloneChef.matchMask = 0;
+    partialChefs.push(cloneChef);
+
+
+    let skill = officialGameData.getSkill(chef.skill);
+    let partialEffects = []
+    let effects = skill.effect;
+    for (let i = 0; i < effects.length; i++) {
+        let effect = effects[i];
+        if ("Partial" !== effect.condition) {
+            continue
+        }
+        partialEffects.push(effect);
+    }
+
+    if (chef.ult) {
+        const ultimateId = chef.ultimateSkill;
+        skill = officialGameData.getSkill(ultimateId);
+        if (skill != null) {
+            effects = skill.effect;
+            for (let i = 0; i < effects.length; i++) {
+                let effect = effects[i];
+                if ("Partial" !== effect.condition) {
+                    continue
+                }
+                partialEffects.push(effect);
+            }
+        }
+    }
+
+
+    for (const ownChef of ownChefs) {
+        //这里判断一厨师能不能用此技能
+
+        if (ownChef.name===chefName){
+            continue
+        }
+        let temp = [];
+        for (let i = 0; i < partialEffects.length; i++) {
+            let effect = partialEffects[i];
+            if (effect.conditionType === 'ChefTag') {
+                //过滤条件
+                let conditionValueList = effect.conditionValueList
+                let selfTag = ownChef.tags;
+                if (selfTag==null){
+                    continue;
+                }
+                for (let i = 0; i < selfTag.length; i++) {
+                    if (conditionValueList.indexOf(selfTag[i]) !== -1) {
+                        temp.push(effect);
+                        break;
+                    }
+                }
+            } else {
+                temp.push(effect);
+            }
+        }
+        let cloneChef = cloneObject(ownChef);
+        if (temp.length===0){
+            continue;
+        }
+        cloneChef.partialEffects = temp;
+        cloneChef.mask = 0;
+        cloneChef.matchMask = mask;
+        partialChefs.push(cloneChef);
+    }
+    return partialChefs;
+}
+
 function buildChefSkillEffect(officialGameData, chef) {
     const skillEffect = new SkillEffect();
     let skill = officialGameData.getSkill(chef.skill);
     let effect = skill.effect;
     for (let i = 0; i < effect.length; i++) {
-        skillEffect.effect(effect[i], skill,chef);
+        skillEffect.effect(effect[i], skill, chef);
     }
 
     //如果没修炼，已经把修炼技能删除掉了
@@ -906,7 +1121,7 @@ function buildChefSkillEffect(officialGameData, chef) {
         if (skill != null) {
             effect = skill.effect;
             for (let i = 0; i < effect.length; i++) {
-                skillEffect.effect(effect[i], skill,chef);
+                skillEffect.effect(effect[i], skill, chef);
             }
         }
     }
@@ -918,7 +1133,7 @@ function buildChefSkillEffect(officialGameData, chef) {
             if (skill != null) {
                 effect = skill.effect;
                 for (let i = 0; i < effect.length; i++) {
-                    skillEffect.effect(effect[i], skill,chef);
+                    skillEffect.effect(effect[i], skill, chef);
                 }
             }
         }
@@ -931,9 +1146,16 @@ function buildChefSkillEffect(officialGameData, chef) {
             if (skill != null) {
                 effect = skill.effect;
                 for (let i = 0; i < effect.length; i++) {
-                    skillEffect.effect(effect[i], skill,chef);
+                    skillEffect.effect(effect[i], skill, chef);
                 }
             }
+        }
+    }
+
+    const partialEffects = chef.partialEffects;
+    if (partialEffects) {
+        for (let i = 0; i < partialEffects.length; i++) {
+            skillEffect.partialEffect(partialEffects[i], skill, chef);
         }
     }
 
@@ -948,13 +1170,6 @@ function buildChefSkillEffect(officialGameData, chef) {
     return skillEffect;
 }
 
-function cloneChef(chef) {
-    let chef1 = Object.create(chef);
-    for (let p in chef) {
-        if (chef.hasOwnProperty(p))
-            chef1[p] = chef[p];
-    }
-    return chef1;
-}
+//浅层拷贝
 
 export {GodInference, OfficialGameData, MyGameData, CalConfig, Calculator}

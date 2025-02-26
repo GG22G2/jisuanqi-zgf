@@ -173,7 +173,7 @@ export default {
     return {
       //http://localhost:5173/jisuanqi-zgf?useAll=true
       //如果存在useAll参数，并且为true则CalConfig中useAll为true
-      calConfig: new CalConfig([0, 10, 10, 8, 8, 8, 8, 8, 10, 30], 100, 5, 0.95, false, false),
+      calConfig: new CalConfig([0, 10, 10, 8, 8, 8, 8, 8, 10, 30], 100, 5, 0.95, false, true),
       percentage: 0,
       showPercentage: false,
       dataCode: '',

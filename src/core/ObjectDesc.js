@@ -1,3 +1,4 @@
+import {cloneObject} from "./utils.js";
 
 export class PlayChef {
     constructor(chef) {
@@ -100,6 +101,7 @@ export class PlayRecipe {
         return "{\"recipe\" : \"" + this.recipe.name + "\", \"count\" :" + this.count + '}';
     }
 }
+
 export class SkillEffect {
     constructor() {
         this.canCal = true;
@@ -122,7 +124,7 @@ export class SkillEffect {
         this.usevegetable = 0;
 
         this.goldgain = 0;
-        this.tempAddtion = null;
+
 
         this.usebake = 0;
         this.useboil = 0;
@@ -142,6 +144,9 @@ export class SkillEffect {
         //基础售价增加百分比
         this.basePrice = 0;
 
+        //基础售价 固定数值
+        this.basePriceAbs = 0;
+
         //基础售价增加百分比   蒸技法  1代表100%
 
         this.basicPriceUseBake = 0;
@@ -152,7 +157,6 @@ export class SkillEffect {
         this.basicPriceUseSteam = 0;
 
 
-
         this.basicPriceUseSour = 0;
         this.basicPriceUseSalty = 0;
         this.basicPriceUseTasty = 0;
@@ -161,13 +165,11 @@ export class SkillEffect {
         this.basicPriceUseBitter = 0;
 
 
-
-
-
-
         //1,2,3,4,5星料理售价加成
         this.rarity = [0, 0, 0, 0, 0, 0]
 
+        //1,2,3,4,5星料理基础售价加成
+        this.baseRarity = [0, 0, 0, 0, 0, 0]
 
         // !!!大于等于!!!  某个份数生效
         this.excessCookbookNum = []
@@ -178,6 +180,8 @@ export class SkillEffect {
         //品质  !!!大于等于!!!  某个级别生效
         this.excessRank = []
 
+        //品质  !!!大于等于!!!  某个级别生效
+        this.baseExcessRank = []
     }
 
     /**
@@ -194,66 +198,115 @@ export class SkillEffect {
         return clone;
     }
 
-    effect(effect, skill,chef) {
-        if ("Partial" === effect.condition) {
-            if (this.tempAddtion == null) {
-                this.tempAddtion = new TempAddition();
-            }
 
-            //Partial 会影响其他厨师的技能，比如场上厨师制作炒料理基础售价+35% 每制作一种神级料理场上厨师蒸售价+10%
+    //处理光环类技能，作用加到当前厨师身上
+    partialEffect(effect, skill, chef) {
 
-            //暂时不支持全局影响，但是可以判断对自己的影响
+        //会影响其他厨师的技能，直接将技能挂在到符合条件的厨师身上
 
-            switch ((effect.type)) {
-                case "Bake":
-                    this.tempAddtion.bake += effect.value;
-                    break;
-                case "Steam":
-                    this.tempAddtion.steam += effect.value;
-                    break;
-                case "Boil":
-                    this.tempAddtion.boil += effect.value;
-                    break;
-                case "Fry":
-                    this.tempAddtion.fry += effect.value;
-                    break;
-                case "Knife":
-                    this.tempAddtion.knife += effect.value;
-                    break;
-                case "Stirfry":
-                    this.tempAddtion.stirfry += effect.value;
-                    break;
+        // 比如兰飞鸿【制作料理基础售价+30%小当家系列厨师在场时对其也生效】， 所以对刘昴星来说，就是创建两个刘昴星，一个是正常的刘昴星，另一个刘昴星除了有自己的技能，还包含兰飞鸿的修炼技能
+        // 但是这种算最大分的时候要有额外校验，比如使用了兰飞鸿技能，最终的三个厨师里必须包含兰飞鸿
+        // 比如每制作一种神级料理场上厨师蒸售价+10%
 
-                case "BasicPrice":
-                    console.log('effect的type没有被考虑到,需要处理', skill, effect)
+        //Partial 会影响其他厨师的技能，比如场上厨师制作炒料理基础售价+35% 每制作一种神级料理场上厨师蒸售价+10%
 
 
+        switch ((effect.type)) {
+            case "Bake":
+                this.bake += effect.value;
+                break;
+            case "Steam":
+                this.steam += effect.value;
+                break;
+            case "Boil":
+                this.boil += effect.value;
+                break;
+            case "Fry":
+                this.fry += effect.value;
+                break;
+            case "Knife":
+                this.knife += effect.value;
+                break;
+            case "Stirfry":
+                this.stirfry += effect.value;
+                break;
 
+            case "UseSteam":
 
-                    break;
-                case "BasicPriceUseKnife":
-                    if (effect.conditionType === 'ChefTag') {
-                        let conditionValueList = effect.conditionValueList
-                        let selfTag = chef.tags;
+                // console.log('effect的type没有完成,需要处理', skill, effect)
+                break
 
-                        for (let i = 0; i < selfTag.length; i++) {
-                            if (conditionValueList.indexOf(selfTag[i])!==-1){
-                                //蒸类料理基础售价
-                                if (effect.cal === 'Percent') {
-                                    this.basicPriceUseKnife += effect.value / 100;
-                                }
+            case "BasicPrice":
+                //console.log('effect的type没有被考虑到,需要处理', skill, effect)
+                //todo  这里是针对兰飞鸿的，为了使小当家系列可以分数更准确
+
+                if (effect.conditionType === 'SameSkill') {
+                    //制作三种同技法料理 忽略
+
+                } else if (effect.conditionType === 'CookbookRarity') {
+                    //console.log(skill)
+                    //星级基础售价加成
+                    let conditionValueList = effect.conditionValueList;
+                    for (let i = 0; i < conditionValueList.length; i++) {
+                        if (effect.cal==='Percent'){
+                            this.baseRarity[conditionValueList[i]] += effect.value / 100
+                        }else {
+                            this.basePriceAbs += effect.value;
+                        }
+                    }
+                } else if (effect.conditionType === 'Rank') {
+                    //制作的品质大于等于某个级别时，增加售价  1可 2优 3特 4神 5传
+                    this.baseExcessRank.push([effect.conditionValue, effect.value / 100])
+
+                } else if (effect.conditionType === 'ChefTag') {
+                    let conditionValueList = effect.conditionValueList
+                    let selfTag = chef.tags;
+
+                    for (let i = 0; i < selfTag.length; i++) {
+                        if (conditionValueList.indexOf(selfTag[i]) !== -1) {
+                            //蒸类料理基础售价
+                            if (effect.cal === 'Percent') {
+                                this.basePrice += effect.value / 100;
                             }
                         }
                     }
-                    //this.tempAddtion.stirfry += effect.value;
-                    break;
-                case "OpenTime":
-                    break;
+                }
 
-                default:
-                    console.log('effect的type没有被考虑到,需要处理', skill, effect)
-                    break;
-            }
+
+                break;
+            case "BasicPriceUseKnife":
+                //console.log('effect的type没有被考虑到,需要处理', skill, effect)
+                if (effect.conditionType === 'ChefTag') {
+                    let conditionValueList = effect.conditionValueList
+                    let selfTag = chef.tags;
+
+                    for (let i = 0; i < selfTag.length; i++) {
+                        if (conditionValueList.indexOf(selfTag[i]) !== -1) {
+                            //蒸类料理基础售价
+                            if (effect.cal === 'Percent') {
+                                this.basicPriceUseKnife += effect.value / 100;
+                            }
+                        }
+                    }
+                }
+                break;
+            case "BasicPriceUseStirfry":
+                console.log('effect的type没有被考虑到,需要处理', skill, effect)
+                break;
+            case "OpenTime":
+                break;
+
+            default:
+                console.log('effect的type没有被考虑到,需要处理', skill, effect)
+                break;
+        }
+    }
+
+    //处理技能对厨师自身的影响
+    effect(effect, skill, chef) {
+        if ("Partial" === effect.condition) {
+            //console.log("忽略技能，调用partialEffect处理",skill)
+            this.partialEffect(effect, skill, chef)
         } else if ("Self" === effect.condition) {
             switch (effect.type) {
                 case "Bake":
@@ -353,8 +406,9 @@ export class SkillEffect {
                     //厨具效果翻倍,目前来看都是用在贵客率上了，先不管
                     break;
                 case 'BasicPrice':
-                    //todo 我还没有这一类的厨师，没法判断计算规则，
-                    // console.log('基础售价类技能还没有生效')
+                    //todo 待实现
+                    // 樊声 炎罗 小红帽 天女 乐乐妹 汤圆(汤圆的技能可能处理不了)
+                    // console.log('基础售价类技能还没有生效基础售价类技能还没有生效基础售价类技能还没有生效', skill, effect,chef)
                     break;
                 case 'BasicPriceUseStirfry':
                     //蒸类料理基础售价
@@ -456,11 +510,12 @@ export class SkillEffect {
                     }
                     break
                 case  "MaxEquipLimit":
-                    //增加最大
+                    //增加最大做菜数量，感觉出神里用不大，不考虑
 
                     break;
                 case  "MaterialReduce":
                     //制作料理时   食材消耗数量改动， 这个能增加做的份数， 但是估计增加份数比例最好的情况能代理20%左右的总收益
+                    console.log("食材消耗减少技能效果暂不支持")
                     break;
                 case  "GuestApearRate":
                 case  "GuestAntiqueDropRate":
@@ -499,12 +554,13 @@ export class SkillEffect {
             }
         } else if (effect.condition === 'Next') {
             //todo 影响下一位上场厨师
-            // console.log('下一位上场厨师类技能还没有生效')
+            // console.log('下一位上场厨师类技能还没有生效',skill, effect)
         } else if (effect.condition !== 'Global') {
             console.warn('新类型的effect,需要处理', skill, effect)
 
         }
     }
+
 
 }
 
@@ -627,10 +683,6 @@ export class Chef {
 
 Chef.SEX_MAN = 1;
 Chef.SEX_WOMAN = 2;
-
-
-
-
 
 
 export class Effect {
