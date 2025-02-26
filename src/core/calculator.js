@@ -189,6 +189,7 @@ export class Calculator {
         let qualityAddS = 0;  //技法加成
         let skillEffect = ownChef.skillEffect;
         const rarity = skillEffect.rarity;
+        const baseRarity = skillEffect.baseRarity;
         let qualityAddQ = this.qualityAddNoEquip(ownChef, skillEffect, ownRecipe); //品质加成
         if (qualityAddQ < 0) {
             return 0;
@@ -247,7 +248,10 @@ export class Calculator {
         let price = ownRecipe.price;
 
         //基础售价的加成
-        let basePriceAdd = this.basePriceAdd(skillEffect, ownRecipe);
+        let basePriceAdd = this.basePriceAdd(skillEffect, ownRecipe) + baseRarity[ownRecipe.rarity];
+
+
+
 
         price = price * (1 + basePriceAdd);
 

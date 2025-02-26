@@ -144,7 +144,7 @@ export class SkillEffect {
         //基础售价增加百分比
         this.basePrice = 0;
 
-        //基础售价 固定数值
+        //基础售价 固定数值   待实现
         this.basePriceAbs = 0;
 
         //基础售价增加百分比   蒸技法  1代表100%
@@ -168,7 +168,7 @@ export class SkillEffect {
         //1,2,3,4,5星料理售价加成
         this.rarity = [0, 0, 0, 0, 0, 0]
 
-        //1,2,3,4,5星料理基础售价加成
+        //1,2,3,4,5星料理基础售价加成  待实现
         this.baseRarity = [0, 0, 0, 0, 0, 0]
 
         // !!!大于等于!!!  某个份数生效
@@ -210,6 +210,38 @@ export class SkillEffect {
 
         //Partial 会影响其他厨师的技能，比如场上厨师制作炒料理基础售价+35% 每制作一种神级料理场上厨师蒸售价+10%
 
+        /*switch ((effect.conditionType)) {
+
+            case "ChefTag":
+                if (this.chefTagMatchSelf(effect,chef)){
+                    //具体逻辑
+
+                }
+                break;
+            case "CookbookRarity":
+                //console.log("CookbookRarity",effect)
+                break;
+            case "Rank":
+                console.log("Rank",effect)
+                break;
+            case "SameSkill":
+
+                break;
+            case "PerRank":
+
+                break;
+
+            default:
+                //无条件
+                //console.log("无条件",effect)
+                break;
+        }*/
+
+
+        if (['SameSkill', 'PerRank'].indexOf(effect.conditionType) !== -1) {
+            //console.log('暂时实现不了的effect', skill, effect, chef)
+            return
+        }
 
         switch ((effect.type)) {
             case "Bake":
@@ -232,6 +264,7 @@ export class SkillEffect {
                 break;
 
             case "UseSteam":
+                this.chefTagMatchSelfPercent(effect, chef, 'useSteam');
 
                 // console.log('effect的type没有完成,需要处理', skill, effect)
                 break
@@ -248,9 +281,9 @@ export class SkillEffect {
                     //星级基础售价加成
                     let conditionValueList = effect.conditionValueList;
                     for (let i = 0; i < conditionValueList.length; i++) {
-                        if (effect.cal==='Percent'){
+                        if (effect.cal === 'Percent') {
                             this.baseRarity[conditionValueList[i]] += effect.value / 100
-                        }else {
+                        } else {
                             this.basePriceAbs += effect.value;
                         }
                     }
@@ -259,51 +292,103 @@ export class SkillEffect {
                     this.baseExcessRank.push([effect.conditionValue, effect.value / 100])
 
                 } else if (effect.conditionType === 'ChefTag') {
-                    let conditionValueList = effect.conditionValueList
-                    let selfTag = chef.tags;
-
-                    for (let i = 0; i < selfTag.length; i++) {
-                        if (conditionValueList.indexOf(selfTag[i]) !== -1) {
-                            //蒸类料理基础售价
-                            if (effect.cal === 'Percent') {
-                                this.basePrice += effect.value / 100;
-                            }
+                    if (this.chefTagMatchSelf(effect, chef)) {
+                        if (effect.cal === 'Percent') {
+                            this.basePrice += effect.value / 100;
                         }
                     }
+                } else {
+                    console.log('effect的type没有被考虑到,需要处理', skill, effect)
                 }
 
-
                 break;
+            case 'CookbookPrice':
+                if (effect.cal === 'Percent') {
+                    if (effect.conditionType === 'CookbookRarity') {
+                        //星级售价加成
+                        let conditionValueList = effect.conditionValueList;
+                        for (let i = 0; i < conditionValueList.length; i++) {
+                            this.rarity[conditionValueList[i]] += effect.value / 100
+                        }
+                    } else if (effect.conditionType === 'ExcessCookbookNum') {
+                        //大于等于多少份才技能生效
+                        this.excessCookbookNum.push([effect.conditionValue, effect.value / 100])
+                    } else if (effect.conditionType === 'FewerCookbookNum') {
+                        //小于等于多少份生效
+                        this.fewerCookbookNum.push([effect.conditionValue, effect.value / 100])
+                    } else if (effect.conditionType === 'Rank') {
+                        //制作的品质大于等于某个级别时，增加售价  1可 2优 3特 4神 5传
+                        this.excessRank.push([effect.conditionValue, effect.value / 100])
+                    } else if (effect.conditionType == null){
+                        //场上所有厨师售价+30%  小皇帝
+                    } else {
+                        console.log('出现了没考虑到的参数')
+                        console.log(skill, effect)
+                    }
+                } else {
+                    console.log('出现了没考虑到的参数')
+                    console.log(skill, effect)
+                }
+                break
             case "BasicPriceUseKnife":
-                //console.log('effect的type没有被考虑到,需要处理', skill, effect)
-                if (effect.conditionType === 'ChefTag') {
-                    let conditionValueList = effect.conditionValueList
-                    let selfTag = chef.tags;
-
-                    for (let i = 0; i < selfTag.length; i++) {
-                        if (conditionValueList.indexOf(selfTag[i]) !== -1) {
-                            //蒸类料理基础售价
-                            if (effect.cal === 'Percent') {
-                                this.basicPriceUseKnife += effect.value / 100;
-                            }
-                        }
-                    }
-                }
-                break;
+                this.chefTagMatchSelfPercent(effect, chef, 'basicPriceUseKnife');
+                break
             case "BasicPriceUseStirfry":
-                console.log('effect的type没有被考虑到,需要处理', skill, effect)
+                this.chefTagMatchSelfPercent(effect, chef, 'basicPriceUseStirfry');
                 break;
-            case "OpenTime":
-                break;
+            case 'PerRank':
+                //处理不了 每制作一种神级料理场上厨师炸售价+10%
+                break
 
+            case "OpenTime":
+            case "Meat":
+            case "Vegetable":
+            case "Fish":
+
+            case "Creation":
+                break;
             default:
                 console.log('effect的type没有被考虑到,需要处理', skill, effect)
                 break;
         }
     }
 
+
+    chefTagMatchSelfPercent(effect, chef, key) {
+        if (effect.cal === 'Percent') {
+            if (effect.conditionType === 'ChefTag') {
+                if (this.chefTagMatchSelf(effect, chef)) {
+                    this[key] += effect.value / 100;
+                }
+            } else {
+                //直接加
+                this[key] += effect.value / 100;
+            }
+        } else {
+            console.log('未考虑加具体值', effect, chef, key)
+        }
+
+    }
+
+
+    chefTagMatchSelf(effect, chef) {
+        let conditionValueList = effect.conditionValueList
+        let selfTag = chef.tags;
+        for (let i = 0; i < selfTag.length; i++) {
+            if (conditionValueList.indexOf(selfTag[i]) !== -1) {
+                //蒸类料理基础售价
+                return true;
+            }
+        }
+        return false;
+    }
+
+
     //处理技能对厨师自身的影响
     effect(effect, skill, chef) {
+        // if (chef.name==='刘昴星'){
+        //     debugger
+        // }
         if ("Partial" === effect.condition) {
             //console.log("忽略技能，调用partialEffect处理",skill)
             this.partialEffect(effect, skill, chef)
@@ -403,6 +488,7 @@ export class SkillEffect {
                     this.useSour += effect.value / 100;
                     break;
                 case 'MutiEquipmentSkill':
+                   // debugger
                     //厨具效果翻倍,目前来看都是用在贵客率上了，先不管
                     break;
                 case 'BasicPrice':
@@ -515,7 +601,7 @@ export class SkillEffect {
                     break;
                 case  "MaterialReduce":
                     //制作料理时   食材消耗数量改动， 这个能增加做的份数， 但是估计增加份数比例最好的情况能代理20%左右的总收益
-                    console.log("食材消耗减少技能效果暂不支持")
+                    //console.log("食材消耗减少技能效果暂不支持")
                     break;
                 case  "GuestApearRate":
                 case  "GuestAntiqueDropRate":

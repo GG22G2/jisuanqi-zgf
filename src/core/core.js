@@ -568,16 +568,22 @@ class GodInference {
     initOwn() {
         const chefs = [];
         let ownChefs = this.myGameData.chefs.filter((chef) => {
-            return this.mustChefs.indexOf(chef.name) !== -1 || chef.rarity >= this.chefMinRarity;
+
+            //排除厨师
+            // if (['二郎神','刘昴星','兰飞鸿','忌璃'].indexOf(chef.name)!==-1){
+            //     return false;
+            // }
+
+            return this.mustChefs.indexOf(chef.name) !== -1 || chef.rarity >= this.chefMinRarity ;
         }).sort((chef, chef2) => {
             return chef.chefId - chef2.chefId;
         });
 
         let presenceChefs = [];
        // let partialSkillChef = ['兰飞鸿','露西','美乐蒂'];
-        let partialSkillChef = ['兰飞鸿'];
+        let useGlobalSkillChef = ['兰飞鸿'];
         for (const ownChef of ownChefs) {
-            if (partialSkillChef.indexOf(ownChef.name) === -1) {
+            if (useGlobalSkillChef.indexOf(ownChef.name) === -1) {
                 continue
             }
             let chefList = createPartialSkillChef(this.officialGameData, ownChef, ownChefs)
@@ -799,8 +805,8 @@ class TempCalCacheBuilder {
         this.tempCalCache.scoreCache = new Int32Array(playChefs.length * this.tempCalCache.recipeCount + playPresenceChefs.length * this.tempCalCache.recipeCount);
 
 
-        console.log('上场菜谱', playRecipes)
-        console.log('上场厨师', playChefs)
+       // console.log('上场菜谱', playRecipes)
+       // console.log('上场厨师', playChefs)
 
 
 
@@ -1107,6 +1113,9 @@ function createPartialSkillChef(officialGameData, chef, ownChefs) {
 }
 
 function buildChefSkillEffect(officialGameData, chef) {
+    //todo 待实现  厨具技能效果翻倍;自身效果加50%
+
+
     const skillEffect = new SkillEffect();
     let skill = officialGameData.getSkill(chef.skill);
     let effect = skill.effect;
@@ -1114,10 +1123,15 @@ function buildChefSkillEffect(officialGameData, chef) {
         skillEffect.effect(effect[i], skill, chef);
     }
 
+    let doubleEquip = false;
+
     //如果没修炼，已经把修炼技能删除掉了
     if (chef.ult) {
         const ultimateId = chef.ultimateSkill;
         skill = officialGameData.getSkill(ultimateId);
+        if (ultimateId===528){//厨具效果翻倍
+            doubleEquip = true;
+        }
         if (skill != null) {
             effect = skill.effect;
             for (let i = 0; i < effect.length; i++) {
@@ -1134,6 +1148,9 @@ function buildChefSkillEffect(officialGameData, chef) {
                 effect = skill.effect;
                 for (let i = 0; i < effect.length; i++) {
                     skillEffect.effect(effect[i], skill, chef);
+                    if (doubleEquip){
+                        skillEffect.effect(effect[i], skill, chef);
+                    }
                 }
             }
         }

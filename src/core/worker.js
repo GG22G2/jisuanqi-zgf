@@ -53,6 +53,7 @@ class ChefAndRecipeThread {
         this.recipeCount = recipeCount;
         this.chefMasks = chefMasks;
         this.chefMatchMasks = chefMatchMasks;
+        this.presenceChefCount = presenceChefCount;
         //console.log(calAllCache1)
 
     }
@@ -80,6 +81,7 @@ class ChefAndRecipeThread {
         let chefRealIndex = this.chefRealIndex;
 
         const temp = this.playRecipes;
+        const chefT = this.presenceChefCount + 3;
         let playRecipes = new Int32Array(temp.length * 1680);
         for (let i = start; i < limit; i++) {
             const index = i * 9;
@@ -99,43 +101,36 @@ class ChefAndRecipeThread {
             score2Index = playRecipes[t + 3] * r2 + playRecipes[t + 4] * recipeCount + playRecipes[t + 5];
             score3Index = playRecipes[t + 6] * r2 + playRecipes[t + 7] * recipeCount + playRecipes[t + 8];
 
-            score1Index = score1Index * 6;
-            score2Index = score2Index * 6;
-            score3Index = score3Index * 6;
+            score1Index = score1Index * chefT;
+            score2Index = score2Index * chefT;
+            score3Index = score3Index * chefT;
 
             //给每个厨师生成一个条件码，这里判断如果符合条件，则进入光环技能判断流程。
             //比如刘昂星如果有 兰飞鸿的技能，则兰飞鸿必须在场，特殊技能的厨师生成一个特殊的标识，这里做一次匹配
 
             //有某个厨师重复出现，则便利所有可能
-            for (let c1 = 0; c1 < 6; c1++) {
-                for (let c2 = 0; c2 < 6; c2++) {
-                    for (let c3 = 0; c3 < 6; c3++) {
+
+            for (let c1 = 0; c1 < chefT; c1++) {
+                for (let c2 = 0; c2 < chefT; c2++) {
+                    for (let c3 = 0; c3 < chefT; c3++) {
                         let score = this.groupMaxScore[score1Index + c1] + this.groupMaxScore[score2Index + c2] + this.groupMaxScore[score3Index + c3];
-                        //如果最大分数冲突，则遍历所有确定最大分
-                        let chef1 = this.groupMaxScoreChefIndex[score1Index + c1]
-                        let chef2 = this.groupMaxScoreChefIndex[score2Index + c2]
-                        let chef3 = this.groupMaxScoreChefIndex[score3Index + c3]
-
-                        let realChef1 = chefRealIndex[chef1];
-                        let realChef2 = chefRealIndex[chef2];
-                        let realChef3 = chefRealIndex[chef3];
-
                         if (score > maxScore) {
-                            //console.log("全遍历得到最大分")
+                            //如果最大分数冲突，则遍历所有确定最大分
+                            let chef1 = this.groupMaxScoreChefIndex[score1Index + c1]
+                            let chef2 = this.groupMaxScoreChefIndex[score2Index + c2]
+                            let chef3 = this.groupMaxScoreChefIndex[score3Index + c3]
+
+                            let realChef1 = chefRealIndex[chef1];
+                            let realChef2 = chefRealIndex[chef2];
+                            let realChef3 = chefRealIndex[chef3];
+
                             if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
 
-                                // if (c1>2||c2>2||c3>2){
-                                //     debugger
-                                // }
                                 //特征比较
                                 let mm1 = chefMatchMasks[realChef1];
                                 let mm2 = chefMatchMasks[realChef2];
                                 let mm3 = chefMatchMasks[realChef3];
-
-                                // if (realChef2===116){
-                                //     debugger
-                                // }
-                                if ((mm1 + mm2 + mm3) !== 0) {
+                                if ((mm1 | mm2 | mm3) !== 0) {
                                     //有特殊要求，需要具体计算
                                     let m1 = chefMasks[realChef1];
                                     let m2 = chefMasks[realChef2];
@@ -144,12 +139,13 @@ class ChefAndRecipeThread {
                                     let p2 = mm2 & (m1 | m3)
                                     let p3 = mm3 & (m1 | m2)
 
-                                    if (p1!==mm1||p2!==mm2||p3!==mm2 ){
+                                    if (p1 !== mm1 || p2 !== mm2 || p3 !== mm2) {
+                                       // console.log("忽略结果")
                                         continue
                                     }
-
+                                    //console.log("符合结果")
                                 }
-
+                                //console.log(chef1, chef2, chef3)
                                 maxScore = score;
                                 result.maxScore = maxScore;
                                 result.maxScoreChefGroup = [chef1, chef2, chef3];
@@ -161,25 +157,16 @@ class ChefAndRecipeThread {
             }
 
             /**
-             *
-             *
-             *
-             *
              * 特征用bigint保存
              * 比如无光环技能的值未0b1
              * 有兰飞鸿技能的未0b01;
              * 有南飞技能的为 0b10;
              * 同时有兰飞鸿和南飞的为 0b11;
-             *
-             *
              * 厨师b和c的特征做与运算 结果为 p1
              * p1和 0b11做与运算，如果结果不为0b11则认为不满足条件，不往下继续进行。
              *
-             *
              * 厨师在场就生效的
              * 厨师不仅要在场，还要满足其他条件的，
-             *
-             *
              * */
         }
 
@@ -192,14 +179,14 @@ class ChefAndRecipeThread {
     calAllCache(scoreCache, amberPrice, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount) {
         let maxIndex = recipeCount * recipeCount * recipeCount;
 
-        const groupMaxScore = new Int32Array(maxIndex * (3+ownPresenceChefCount));
-        const groupMaxScoreChefIndex = new Int32Array(maxIndex *  (3+ownPresenceChefCount))
+        const groupMaxScore = new Int32Array(maxIndex * (3 + ownPresenceChefCount));
+        const groupMaxScoreChefIndex = new Int32Array(maxIndex * (3 + ownPresenceChefCount))
         const chefRealIndex = new Int32Array(totalChefCount)
 
         console.time("计算每三道菜最高得分的厨师")
 
         let tAdd = 0;
-        for (let r = 0; r < ownChefCount; r++) {
+        for (let r = 0; r < ownChefCount+ownPresenceChefCount; r++) {
             let equipCount = chefEquipCount[r];
             let start = tAdd, end = tAdd + equipCount + 1;
             for (let t = start; t < end; t++) {
@@ -213,7 +200,7 @@ class ChefAndRecipeThread {
             for (let j = i + 1; j < recipeCount; j++) {
                 for (let k = j + 1; k < recipeCount; k++) {
                     index = i * r2 + j * recipeCount + k;
-                    index = index *  (3 + ownPresenceChefCount);
+                    index = index * (3 + ownPresenceChefCount);
                     //debugger
                     //每一组菜谱组合，计算得分最高的3个厨师
                     let a = 0, b = 0, c = 0, ai = 0, bi = 0, ci = 0;
@@ -270,7 +257,7 @@ class ChefAndRecipeThread {
                     groupMaxScore[index + 1] = b
                     groupMaxScore[index + 2] = c
 
-                   // debugger
+                    // debugger
                     //todo 遍历在场生效厨师 ，生产对应结果
 
                     for (let r1 = 0; r1 < ownPresenceChefCount; r1++) {
@@ -291,15 +278,13 @@ class ChefAndRecipeThread {
                             }
                         }
                         tAdd = end;
-                       // debugger
                         let chefScoreIndex = index + 3 + r1;
                         groupMaxScoreChefIndex[chefScoreIndex] = maxT;
                         groupMaxScore[chefScoreIndex] = maxNum
                     }
-                    //index = index + 3 + ownPresenceChefCount;
                 }
             }
-            postMessage({type: 'p', p: index / (maxIndex * 3)})
+            postMessage({type: 'p', p: index / (maxIndex * (3 + ownPresenceChefCount))})
         }
 
         console.timeEnd("计算每三道菜最高得分的厨师")
