@@ -112,6 +112,26 @@ class GodInference {
 
         const recipePL = ChefAndRecipeThread.disordePermuation_$LI$();
 
+
+        let totalPlayChefCount = this.tempCalCache.playChefs.length + this.tempCalCache.playPresenceChefs.length;
+        let totalChefCount = this.ownChefs.length + this.presenceChefs.length;
+
+        const chefRealIndex = new Int32Array(totalPlayChefCount)
+        let tAdd = 0;
+        for (let r = 0; r < totalChefCount; r++) {
+            let equipCount = this.tempCalCache.chefEquipCount[r];
+            let start = tAdd, end = tAdd + equipCount + 1;
+            for (let t = start; t < end; t++) {
+                if (r < this.ownChefs.length) {
+                    chefRealIndex[t] = r;
+                } else {
+                    chefRealIndex[t] = this.presenceChefs[r - this.ownChefs.length].index;
+                }
+            }
+            tAdd = end;
+        }
+
+
         //console.log(playRecipesArr)
         let data = {
             playRecipesArr,
@@ -125,7 +145,8 @@ class GodInference {
             presenceChefCount: this.presenceChefs.length,
             chefEquipCount: this.tempCalCache.chefEquipCount,
             chefMasks: this.tempCalCache.chefMasks,
-            chefMatchMasks: this.tempCalCache.chefMatchMasks
+            chefMatchMasks: this.tempCalCache.chefMatchMasks,
+            chefRealIndex:chefRealIndex
         }
 
 
@@ -228,9 +249,8 @@ class GodInference {
         this.buildPlayRecipe();
         const builder = new TempCalCacheBuilder();
 
-        this.tempCalCache = builder.build(this.ownChefs,this.presenceChefs, this.playRecipes, this.useEquip ? this.playEquips : [], this.officialGameData
+        this.tempCalCache = builder.build(this.ownChefs, this.presenceChefs, this.playRecipes, this.useEquip ? this.playEquips : [], this.officialGameData
             , this.globalAddtion, this.recipeReward, this.sexReward);
-
 
 
         this.playChefs = this.tempCalCache.playChefs
@@ -424,7 +444,7 @@ class GodInference {
         for (let i = 0; i < 3; i++) {
             let ownChef = this.playChefs[chefIds[i]];
 
-            if (ownChef==null){
+            if (ownChef == null) {
                 ownChef = this.playPresenceChefs[chefIds[i] - this.playChefs.length];
             }
 
@@ -574,13 +594,13 @@ class GodInference {
             //     return false;
             // }
 
-            return this.mustChefs.indexOf(chef.name) !== -1 || chef.rarity >= this.chefMinRarity ;
+            return this.mustChefs.indexOf(chef.name) !== -1 || chef.rarity >= this.chefMinRarity;
         }).sort((chef, chef2) => {
             return chef.chefId - chef2.chefId;
         });
 
         let presenceChefs = [];
-       // let partialSkillChef = ['兰飞鸿','露西','美乐蒂'];
+        // let partialSkillChef = ['兰飞鸿','露西','美乐蒂'];
         let useGlobalSkillChef = ['兰飞鸿'];
         for (const ownChef of ownChefs) {
             if (useGlobalSkillChef.indexOf(ownChef.name) === -1) {
@@ -603,7 +623,7 @@ class GodInference {
 
 
         this.ownChefs = ownChefs;
-        this.presenceChefs= presenceChefs;
+        this.presenceChefs = presenceChefs;
 
         //70 -> 630 -> (630 * 200) -> 126000
         //每个厨师生成一个副本
@@ -673,7 +693,7 @@ class GodInference {
 
 
 class TempCalCache {
-    constructor(chefCount,presenceChefCount, recipeCount) {
+    constructor(chefCount, presenceChefCount, recipeCount) {
         this.scoreCache = null;
         this.groupMaxScore = null;
         this.groupMaxScoreChefIndex = null;
@@ -703,17 +723,16 @@ class TempCalCacheBuilder {
         this.playRecipes = null;
     }
 
-    build(ownChefs,presenceChefs, playRecipes, playEquips, officialGameData, globalAddition, recipeReward, sexReward) {
+    build(ownChefs, presenceChefs, playRecipes, playEquips, officialGameData, globalAddition, recipeReward, sexReward) {
         this.officialGameData = officialGameData;
         this.kitchenGodCal = new Calculator(globalAddition.useall, recipeReward, sexReward);
 
-        this.updateId(ownChefs,0);
-        this.updateId(presenceChefs,ownChefs.length);
+        //this.updateId(ownChefs,0);
+        this.updateId(ownChefs, presenceChefs);
 
 
         this.ownChefs = ownChefs;
         this.presenceChefs = presenceChefs;
-
 
 
         this.playChefs = [...ownChefs];
@@ -723,23 +742,29 @@ class TempCalCacheBuilder {
         this.playEquips = playEquips;
 
 
-
-        this.tempCalCache = new TempCalCache(ownChefs.length,presenceChefs.length, playRecipes.length);
-       // let chefEquipCount = this.tempCalCache.chefEquipCount;
+        this.tempCalCache = new TempCalCache(ownChefs.length, presenceChefs.length, playRecipes.length);
+        // let chefEquipCount = this.tempCalCache.chefEquipCount;
 
 
         this.createCalCache();
         return this.tempCalCache;
     }
 
-    updateId(chefs,start) {
-        for (let i = 0; i < chefs.length; i++) {
-            const chef = chefs[i];
-            chef.index = start+i;
+    updateId(ownChefs, presenceChefs) {
+        let IndexMap = new Map();
+        for (let i = 0; i < ownChefs.length; i++) {
+            const chef = ownChefs[i];
+            chef.index = i;
+            IndexMap.set(chef.chefId, i)
+        }
+        for (let i = 0; i < presenceChefs.length; i++) {
+            const chef = presenceChefs[i];
+            let index = IndexMap.get(chef.chefId)
+            chef.index = index;
         }
     }
 
-    createChefWithEquip(chefs,chefEquipCount,start){
+    createChefWithEquip(chefs, chefEquipCount, start) {
         let playRecipes = this.playRecipes;
         let equips = this.playEquips;
         let playEquipChefs = [];
@@ -779,7 +804,7 @@ class TempCalCacheBuilder {
                     playEquipChefs.push(newPlayChef)
                 }
             }
-            chefEquipCount[start+i] = equipCount
+            chefEquipCount[start + i] = equipCount
         }
         return playEquipChefs;
     }
@@ -793,8 +818,8 @@ class TempCalCacheBuilder {
         let playPresenceChefs = [...this.presenceChefs]
 
         if (this.playEquips.length > 0) {
-            playChefs = this.createChefWithEquip(this.ownChefs,chefEquipCount,0)
-            playPresenceChefs = this.createChefWithEquip(this.presenceChefs,chefEquipCount,this.ownChefs.length)
+            playChefs = this.createChefWithEquip(this.ownChefs, chefEquipCount, 0)
+            playPresenceChefs = this.createChefWithEquip(this.presenceChefs, chefEquipCount, this.ownChefs.length)
         }
 
 
@@ -805,9 +830,8 @@ class TempCalCacheBuilder {
         this.tempCalCache.scoreCache = new Int32Array(playChefs.length * this.tempCalCache.recipeCount + playPresenceChefs.length * this.tempCalCache.recipeCount);
 
 
-       // console.log('上场菜谱', playRecipes)
-       // console.log('上场厨师', playChefs)
-
+        // console.log('上场菜谱', playRecipes)
+        // console.log('上场厨师', playChefs)
 
 
         let recipeCount = this.tempCalCache.recipeCount
@@ -836,13 +860,13 @@ class TempCalCacheBuilder {
         }
 
         let startIndex = this.ownChefs.length;
-        let chefMasks = new Uint32Array(startIndex+this.presenceChefs.length).fill(0);
-        let chefMatchMasks = new Uint32Array(startIndex+this.presenceChefs.length).fill(0);
+        let chefMasks = new Uint32Array(startIndex + this.presenceChefs.length).fill(0);
+        let chefMatchMasks = new Uint32Array(startIndex + this.presenceChefs.length).fill(0);
 
         //给厨师的mask生成对应所以
         for (let i = 0; i < this.presenceChefs.length; i++) {
-            chefMasks[startIndex+i] = this.presenceChefs[i].mask;
-            chefMatchMasks[startIndex+i] = this.presenceChefs[i].matchMask;
+            chefMasks[startIndex + i] = this.presenceChefs[i].mask;
+            chefMatchMasks[startIndex + i] = this.presenceChefs[i].matchMask;
         }
         this.tempCalCache.chefMasks = chefMasks;
         this.tempCalCache.chefMatchMasks = chefMatchMasks;
@@ -891,7 +915,6 @@ class TempCalCacheBuilder {
         }
 
     }
-
 
 
 }
@@ -1077,7 +1100,7 @@ function createPartialSkillChef(officialGameData, chef, ownChefs) {
     for (const ownChef of ownChefs) {
         //这里判断一厨师能不能用此技能
 
-        if (ownChef.name===chefName){
+        if (ownChef.name === chefName) {
             continue
         }
         let temp = [];
@@ -1087,7 +1110,7 @@ function createPartialSkillChef(officialGameData, chef, ownChefs) {
                 //过滤条件
                 let conditionValueList = effect.conditionValueList
                 let selfTag = ownChef.tags;
-                if (selfTag==null){
+                if (selfTag == null) {
                     continue;
                 }
                 for (let i = 0; i < selfTag.length; i++) {
@@ -1101,7 +1124,7 @@ function createPartialSkillChef(officialGameData, chef, ownChefs) {
             }
         }
         let cloneChef = cloneObject(ownChef);
-        if (temp.length===0){
+        if (temp.length === 0) {
             continue;
         }
         cloneChef.partialEffects = temp;
@@ -1129,7 +1152,7 @@ function buildChefSkillEffect(officialGameData, chef) {
     if (chef.ult) {
         const ultimateId = chef.ultimateSkill;
         skill = officialGameData.getSkill(ultimateId);
-        if (ultimateId===528){//厨具效果翻倍
+        if (ultimateId === 528) {//厨具效果翻倍
             doubleEquip = true;
         }
         if (skill != null) {
@@ -1148,7 +1171,7 @@ function buildChefSkillEffect(officialGameData, chef) {
                 effect = skill.effect;
                 for (let i = 0; i < effect.length; i++) {
                     skillEffect.effect(effect[i], skill, chef);
-                    if (doubleEquip){
+                    if (doubleEquip) {
                         skillEffect.effect(effect[i], skill, chef);
                     }
                 }

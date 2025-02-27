@@ -3,7 +3,7 @@ let inited = false;
 self.onmessage = async (e) => {
     let data = e.data;
 
-   await chefAndRecipeThread.setBaseData(data.data);
+    await chefAndRecipeThread.setBaseData(data.data);
 
 
     let result = chefAndRecipeThread.call(data.start, data.limit);
@@ -26,63 +26,120 @@ class ChefAndRecipeThread {
     }
 
 
-   async setBaseData({
-                    playRecipesArr,
-                    recipePL,
-                    scoreCache,
-                    amberPrice,
-                    recipeCount,
-                    playChefCount,
-                    ownChefCount,
-                    playPresenceChefCount,
-                    presenceChefCount,
-                    chefEquipCount,
-                    chefMasks,
-                    chefMatchMasks
-                }) {
+    async setBaseData({
+                          playRecipesArr,
+                          recipePL,
+                          scoreCache,
+                          amberPrice,
+                          recipeCount,
+                          playChefCount,
+                          ownChefCount,
+                          playPresenceChefCount,
+                          presenceChefCount,
+                          chefEquipCount,
+                          chefMasks,
+                          chefMatchMasks,
+                          chefRealIndex
+                      }) {
         this.playRecipes = playRecipesArr;
 
         this.recipePL = recipePL
+        let  i=3,j = 7,k = 8;
 
+        /**
+         *
+         *  1 2 3-100   98
+         *  1 3 4-100   97
+         *  1 4 5-100   96
+         *
+         *
+         *  1 96  97-100 5
+         *  1 97  97-100 3
+         *  1 98  97-100 2
+         *  1 99  100-100 1
+         *
+         *  第一个数是1时的，总数为 1+2+3+4+5+ ... 96+97+98
+         *
+         *  2 3 4-100     97
+         *  2 4 5-100     96
+         *  2 98 99-100   2
+         *  2 99 100-100  1
+         *
+         *  第一个数是2时的，总数为 1+2+3+4+5+ ... 96+97
+         *
+         *  1+2+3+4+5+ ... 96+97+98
+         *  1+2+3+4+5+ ... 96+97
+         *  1+2+3+4+5+ ... 96
+         *  1+2+3+4+5+ ... 68
+         *
+         * i=1 fun =  (1+2+3+4+5+ ... 96+97+98)
+         * i=2 fun =  (1+2+3+4+5+ ... 96+97+98 ) + (1+2+3+4+5+ ... 96+97)
+         * i=3 fun =  (1+2+3+4+5+ ... 96+97+98 ) + (1+2+3+4+5+ ... 96+97)+ (1+2+3+4+5+ ... 96)
+         * i=4 fun =  (1+2+3+4+5+ ... 96+97+98 ) + (1+2+3+4+5+ ... 96+97)+ (1+2+3+4+5+ ... 96)+ (1+2+3+4+5+ ... 95)
+         *
+         *
+         *  i = 32,j=45,k=47
+         *
+         *  96 97 98-100   3
+         *  96 98 99-100   2
+         *  96 99 100-100  1
+         *
+         *  第一个数是96时的，总数为 1+2+3
+         *
+         *
+         *  97 98 99-100   2
+         *  98 99 100-100  1
+         *
+         *  第一个数是97时的，总数为 1+2
+         *
+         *  98 99 100-100  1
+         *
+         *  第一个数是98时的，总数为 1
+         *
+         *
+         *
+         *
+         * 51  52  53-100  48
+         *     53  54-100  47
+         *     54  55-100  46
+         *
+         *
+         * 55  56  57-100  44
+         *     57  58-100  43
+         *     58  59-100  42
+         *
+         *
+         *
+         * 定位索引
+         * */
 
-       const chefRealIndex = new Int32Array(playChefCount + playPresenceChefCount)
-       let tAdd = 0;
-       for (let r = 0; r < ownChefCount+presenceChefCount; r++) {
-           let equipCount = chefEquipCount[r];
-           let start = tAdd, end = tAdd + equipCount + 1;
-           for (let t = start; t < end; t++) {
-               chefRealIndex[t] = r;
+      //  (j-i) * i;
 
-           }
-           tAdd = end;
-       }
+         let result2 = this.calAllCache(scoreCache, recipeCount
+             , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
 
+        // console.log(calAllCache1.groupMaxScoreChefIndex)
 
-       //  let calAllCache1 = this.calAllCache(scoreCache, recipeCount
-       //      , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
-       //
-       // console.log(calAllCache1.groupMaxScoreChefIndex)
+        console.time('计算每三道菜最高得分的厨师')
+        // let result2 = await computeWithWebGPU(scoreCache, recipeCount
+        //     , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+        console.timeEnd('计算每三道菜最高得分的厨师')
 
-       console.time('计算每三道菜最高得分的厨师')
-       let result2 = await computeWithWebGPU(scoreCache, recipeCount
-           , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
-       console.timeEnd('计算每三道菜最高得分的厨师')
+        //验证结果
 
-       //验证结果
+        // for (let i = 0; i < result2.groupMaxScore.length; i++) {
+        //     if (result2.groupMaxScore[i]!==result2.groupMaxScore[i]){
+        //         console.log("结果不正确")
+        //     }
+        // }
+        //
+        // for (let i = 0; i < result2.groupMaxScore.length; i++) {
+        //     if (result2.groupMaxScoreChefIndex[i]!==result2.groupMaxScoreChefIndex[i]){
+        //         console.log("结果不正确")
+        //     }
+        // }
 
-       // for (let i = 0; i < result2.groupMaxScore.length; i++) {
-       //     if (result2.groupMaxScore[i]!==result2.groupMaxScore[i]){
-       //         console.log("结果不正确")
-       //     }
-       // }
-       //
-       // for (let i = 0; i < result2.groupMaxScore.length; i++) {
-       //     if (result2.groupMaxScoreChefIndex[i]!==result2.groupMaxScoreChefIndex[i]){
-       //         console.log("结果不正确")
-       //     }
-       // }
-
-     //  console.log(result2.groupMaxScoreChefIndex)
+        //  console.log(result2.groupMaxScoreChefIndex)
 
         this.groupMaxScore = result2.groupMaxScore
         this.groupMaxScoreChefIndex = result2.groupMaxScoreChefIndex
@@ -178,12 +235,14 @@ class ChefAndRecipeThread {
                                     let p3 = mm3 & (m1 | m2)
 
                                     if (p1 !== mm1 || p2 !== mm2 || p3 !== mm2) {
-                                       // console.log("忽略结果")
+                                        // console.log("忽略结果")
                                         continue
                                     }
                                     //console.log("符合结果")
                                 }
-                                //console.log(chef1, chef2, chef3)
+                               // console.log(chef1, chef2, chef3)
+                               // console.log(realChef1, realChef2, realChef3)
+
                                 maxScore = score;
                                 result.maxScore = maxScore;
                                 result.maxScoreChefGroup = [chef1, chef2, chef3];
@@ -219,20 +278,9 @@ class ChefAndRecipeThread {
 
         const groupMaxScore = new Int32Array(maxIndex * (3 + ownPresenceChefCount));
         const groupMaxScoreChefIndex = new Int32Array(maxIndex * (3 + ownPresenceChefCount))
-        const chefRealIndex = new Int32Array(totalChefCount)
 
         console.time("计算每三道菜最高得分的厨师")
 
-        let tAdd = 0;
-        for (let r = 0; r < ownChefCount+ownPresenceChefCount; r++) {
-            let equipCount = chefEquipCount[r];
-            let start = tAdd, end = tAdd + equipCount + 1;
-            for (let t = start; t < end; t++) {
-                chefRealIndex[t] = r;
-            }
-            tAdd = end;
-        }
-        debugger
 
         const r2 = recipeCount * recipeCount;
         let index = 0;
@@ -241,7 +289,6 @@ class ChefAndRecipeThread {
                 for (let k = j + 1; k < recipeCount; k++) {
                     index = i * r2 + j * recipeCount + k;
                     index = index * (3 + ownPresenceChefCount);
-                    //debugger
                     //每一组菜谱组合，计算得分最高的3个厨师
                     let a = 0, b = 0, c = 0, ai = 0, bi = 0, ci = 0;
                     let tAdd = 0;
@@ -316,12 +363,10 @@ class ChefAndRecipeThread {
         }
 
         console.timeEnd("计算每三道菜最高得分的厨师")
-
         return {
-            groupMaxScore, groupMaxScoreChefIndex, chefRealIndex
+            groupMaxScore, groupMaxScoreChefIndex
         }
     }
-
 
 
 }
@@ -330,7 +375,11 @@ class ChefAndRecipeThread {
 async function initWebGPU() {
     if (!navigator.gpu) throw new Error("WebGPU not supported");
     const adapter = await navigator.gpu.requestAdapter();
-    const device = await adapter.requestDevice();
+    const device = await adapter.requestDevice({
+        requiredLimits: {
+            maxStorageBufferBindingSize: 2147483644 // 或adapter.limits.maxStorageBufferBindingSize
+        }
+    });
     // device.popErrorScope().then((error) => {
     //     if (error) {
     //         // There was an error creating the sampler, so discard it.
@@ -525,10 +574,10 @@ async function computeWithWebGPU(
     const bindGroup = device.createBindGroup({
         layout: computePipeline.getBindGroupLayout(0),
         entries: [
-            { binding: 0, resource: { buffer: scoreCacheBuffer } },
-            { binding: 1, resource: { buffer: chefEquipCountBuffer } },
-            { binding: 2, resource: { buffer: groupMaxScoreBuffer } },
-            { binding: 3, resource: { buffer: groupMaxScoreChefIndexBuffer } }
+            {binding: 0, resource: {buffer: scoreCacheBuffer}},
+            {binding: 1, resource: {buffer: chefEquipCountBuffer}},
+            {binding: 2, resource: {buffer: groupMaxScoreBuffer}},
+            {binding: 3, resource: {buffer: groupMaxScoreChefIndexBuffer}}
 
         ]
     });
@@ -561,21 +610,35 @@ async function computeWithWebGPU(
     });
     commandEncoder.copyBufferToBuffer(groupMaxScoreBuffer, 0, resultBuffer1, 0, outputSize);
     commandEncoder.copyBufferToBuffer(groupMaxScoreChefIndexBuffer, 0, resultBuffer2, 0, outputSize);
-   // commandEncoder.copyBufferToBuffer(testData, 0, resultBuffer3, 0, outputSize);
+    // commandEncoder.copyBufferToBuffer(testData, 0, resultBuffer3, 0, outputSize);
     device.queue.submit([commandEncoder.finish()]);
 
     await resultBuffer1.mapAsync(GPUMapMode.READ);
     await resultBuffer2.mapAsync(GPUMapMode.READ);
-  //  await resultBuffer3.mapAsync(GPUMapMode.READ);
+    //  await resultBuffer3.mapAsync(GPUMapMode.READ);
     const groupMaxScore = new Int32Array(resultBuffer1.getMappedRange().slice());
     const groupMaxScoreChefIndex = new Int32Array(resultBuffer2.getMappedRange().slice());
     //const testDataResult = new Int32Array(resultBuffer3.getMappedRange().slice());
     resultBuffer1.unmap();
     resultBuffer2.unmap();
-   // resultBuffer3.unmap();
+    // resultBuffer3.unmap();
     //console.log(testDataResult)
-    return { groupMaxScore, groupMaxScoreChefIndex };
+    return {groupMaxScore, groupMaxScoreChefIndex};
 }
 
+function calI(i, N) {
+    // Using regular numbers (JavaScript doesn't have a strict int type)
+    // Division by integers like 6 and 2 will still work as expected
+    const term1 = i * (i - 1) * (i - 3 * N - 2) / 6;
+    const term2 = i * N * (N + 1) / 2;
+    return term1 + term2;
+}
+
+function calJ(i, j, N) {
+    const count = j - i;
+    const start = N - i - 2;
+    const end = start - count + 1;
+    return (start + end) * count / 2;
+}
 
 let chefAndRecipeThread = new ChefAndRecipeThread();
