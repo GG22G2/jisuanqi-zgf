@@ -1,12 +1,13 @@
 let inited = false;
 
-self.onmessage = (e) => {
+self.onmessage = async (e) => {
     let data = e.data;
 
-    chefAndRecipeThread.setBaseData(data.data);
+   await chefAndRecipeThread.setBaseData(data.data);
 
 
     let result = chefAndRecipeThread.call(data.start, data.limit);
+    console.log(result)
     self.postMessage({type: 'r', result: result});
 
 };
@@ -25,7 +26,7 @@ class ChefAndRecipeThread {
     }
 
 
-    setBaseData({
+   async setBaseData({
                     playRecipesArr,
                     recipePL,
                     scoreCache,
@@ -43,13 +44,50 @@ class ChefAndRecipeThread {
 
         this.recipePL = recipePL
 
-        let calAllCache1 = this.calAllCache(scoreCache, amberPrice, recipeCount
-            , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+
+       const chefRealIndex = new Int32Array(playChefCount + playPresenceChefCount)
+       let tAdd = 0;
+       for (let r = 0; r < ownChefCount+presenceChefCount; r++) {
+           let equipCount = chefEquipCount[r];
+           let start = tAdd, end = tAdd + equipCount + 1;
+           for (let t = start; t < end; t++) {
+               chefRealIndex[t] = r;
+
+           }
+           tAdd = end;
+       }
 
 
-        this.groupMaxScore = calAllCache1.groupMaxScore
-        this.groupMaxScoreChefIndex = calAllCache1.groupMaxScoreChefIndex
-        this.chefRealIndex = calAllCache1.chefRealIndex
+       //  let calAllCache1 = this.calAllCache(scoreCache, recipeCount
+       //      , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+       //
+       // console.log(calAllCache1.groupMaxScoreChefIndex)
+
+       console.time('计算每三道菜最高得分的厨师')
+       let result2 = await computeWithWebGPU(scoreCache, recipeCount
+           , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+       console.timeEnd('计算每三道菜最高得分的厨师')
+
+       //验证结果
+
+       // for (let i = 0; i < result2.groupMaxScore.length; i++) {
+       //     if (result2.groupMaxScore[i]!==result2.groupMaxScore[i]){
+       //         console.log("结果不正确")
+       //     }
+       // }
+       //
+       // for (let i = 0; i < result2.groupMaxScore.length; i++) {
+       //     if (result2.groupMaxScoreChefIndex[i]!==result2.groupMaxScoreChefIndex[i]){
+       //         console.log("结果不正确")
+       //     }
+       // }
+
+     //  console.log(result2.groupMaxScoreChefIndex)
+
+        this.groupMaxScore = result2.groupMaxScore
+        this.groupMaxScoreChefIndex = result2.groupMaxScoreChefIndex
+        this.chefRealIndex = chefRealIndex
+
         this.recipeCount = recipeCount;
         this.chefMasks = chefMasks;
         this.chefMatchMasks = chefMatchMasks;
@@ -176,7 +214,7 @@ class ChefAndRecipeThread {
         return result;
     }
 
-    calAllCache(scoreCache, amberPrice, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount) {
+    calAllCache(scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount) {
         let maxIndex = recipeCount * recipeCount * recipeCount;
 
         const groupMaxScore = new Int32Array(maxIndex * (3 + ownPresenceChefCount));
@@ -194,6 +232,8 @@ class ChefAndRecipeThread {
             }
             tAdd = end;
         }
+        debugger
+
         const r2 = recipeCount * recipeCount;
         let index = 0;
         for (let i = 0; i < recipeCount; i++) {
@@ -239,16 +279,7 @@ class ChefAndRecipeThread {
                             c = maxNum;
                             ci = maxT;
                         }
-
                     }
-
-
-                    //groupMaxScoreChefIndex中必须包含所有上场技能类车厨师，也必须包含所有能享受到效果的厨师
-
-                    //如果开启了在场技能， 则结果集中必须包含厨师本身，此技能夹持下最好的哪一个厨师，
-
-                    //比如启用了今珏[场上厨师制作5火料理基础售价+20%]技能，那么groupMaxScoreChefIndex中除了正常的前三结果外，第四个必须是今珏的得分，第五个是享受今珏技能效果下，做的最好的哪一个非今珏的厨师
-
                     groupMaxScoreChefIndex[index] = ai;
                     groupMaxScoreChefIndex[index + 1] = bi;
                     groupMaxScoreChefIndex[index + 2] = ci;
@@ -257,11 +288,8 @@ class ChefAndRecipeThread {
                     groupMaxScore[index + 1] = b
                     groupMaxScore[index + 2] = c
 
-                    // debugger
-                    //todo 遍历在场生效厨师 ，生产对应结果
-
+                    //遍历在场生效厨师 ，生产对应结果
                     for (let r1 = 0; r1 < ownPresenceChefCount; r1++) {
-                        //debugger
                         let r = r1 + ownChefCount;
                         let equipCount = chefEquipCount[r];
                         let start = tAdd, end = tAdd + equipCount + 1;
@@ -293,6 +321,261 @@ class ChefAndRecipeThread {
             groupMaxScore, groupMaxScoreChefIndex, chefRealIndex
         }
     }
+
+
+
 }
+
+
+async function initWebGPU() {
+    if (!navigator.gpu) throw new Error("WebGPU not supported");
+    const adapter = await navigator.gpu.requestAdapter();
+    const device = await adapter.requestDevice();
+    // device.popErrorScope().then((error) => {
+    //     if (error) {
+    //         // There was an error creating the sampler, so discard it.
+    //
+    //         console.error(`An error occurred while creating sampler: ${error.message}`);
+    //     }
+    // });
+    return device;
+}
+
+async function computeWithWebGPU(
+    scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount
+) {
+    const device = await this.initWebGPU();
+
+// 创建输入缓冲区
+    const scoreCacheBuffer = device.createBuffer({
+        size: scoreCache.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+
+    });
+    // new Int32Array(scoreCacheBuffer.getMappedRange()).set(scoreCache);
+    // scoreCacheBuffer.unmap();
+    device.queue.writeBuffer(scoreCacheBuffer, 0, scoreCache);
+
+
+    const chefEquipCountBuffer = device.createBuffer({
+        size: chefEquipCount.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+
+    });
+    // new Int32Array(chefEquipCountBuffer.getMappedRange()).set(chefEquipCount);
+    // chefEquipCountBuffer.unmap();
+    device.queue.writeBuffer(chefEquipCountBuffer, 0, chefEquipCount);
+
+
+    // 创建 uniform 缓冲区存储参数
+    const params = new Uint32Array([
+        recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount
+    ]);
+    const paramsBuffer = device.createBuffer({
+        size: params.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+
+    });
+    // new Uint32Array(paramsBuffer.getMappedRange()).set(params);
+    // paramsBuffer.unmap();
+    device.queue.writeBuffer(paramsBuffer, 0, params);
+
+
+    // 创建输出缓冲区
+    const maxIndex = recipeCount * recipeCount * recipeCount;
+    const outputSize = maxIndex * (3 + ownPresenceChefCount) * 4; // Int32Array 的字节大小
+    const groupMaxScoreBuffer = device.createBuffer({
+        size: outputSize,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+    });
+    const groupMaxScoreChefIndexBuffer = device.createBuffer({
+        size: outputSize,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+    });
+
+    const testData = device.createBuffer({
+        size: outputSize,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+    });
+
+    // 创建着色器模块
+    const shaderModule = device.createShaderModule({
+        code: ` @group(0) @binding(0) var<storage, read> scoreCache: array<i32>;
+                @group(0) @binding(1) var<storage, read> chefEquipCount: array<i32>;
+                @group(0) @binding(2) var<storage, read_write> groupMaxScore: array<i32>;
+                @group(0) @binding(3) var<storage, read_write> groupMaxScoreChefIndex: array<i32>;
+         
+                
+                @compute @workgroup_size(64)
+                fn main(@builtin(global_invocation_id) globalIndex: vec3<u32>) {
+                            let recipeCount : i32 = ${recipeCount};
+                           let totalChefCount : i32 = ${totalChefCount};
+                           let ownChefCount : i32= ${ownChefCount};
+                           let ownPresenceChefCount : i32= ${ownPresenceChefCount};
+                             let queueDeep : i32 = ${(3 + ownPresenceChefCount)};
+                             
+                    let maxIndex : i32 = recipeCount * recipeCount * recipeCount;
+                    let r2 : i32 = recipeCount * recipeCount;
+
+                    var index : i32 = i32(globalIndex.x);
+                    if (index >= maxIndex * (3 + ownPresenceChefCount)) {
+                        return;
+                    }
+
+                    let i : i32 = index / r2;
+                    let j : i32  = (index % r2) / recipeCount;
+                    let k : i32 = index % recipeCount;
+
+                    if ( i >= j || j >= k ){
+                        return;
+                    }
+                    
+                    index = index * queueDeep;
+                    var a: i32 = 0;
+                    var b: i32 = 0;
+                    var c: i32 = 0;
+                    var ai: i32 = 0;
+                    var bi: i32 = 0;
+                    var ci: i32 = 0;
+
+                    var tAdd: i32 = 0;
+
+                    for (var r: i32 = 0; r < ownChefCount; r++) {
+                        var equipCount: i32 = chefEquipCount[r];
+                        var start: i32 = tAdd;
+                        var end: i32 = tAdd + equipCount + 1;
+                        var maxNum: i32 = 0;
+                        var maxT: i32 = 0;
+
+                        for (var t: i32 = start; t < end; t++) {
+                            if (!(scoreCache[t * recipeCount + i] == 0 || scoreCache[t * recipeCount + j] == 0 || scoreCache[t * recipeCount + k] == 0)) {
+                                let num : i32 = scoreCache[t * recipeCount + i] + scoreCache[t * recipeCount + j] + scoreCache[t * recipeCount + k];
+                                if (num > maxNum) {
+                                    maxNum = num;
+                                    maxT = t;
+                                }
+                            }
+                        }
+                        tAdd = end;
+
+                        if (maxNum > a) {
+                            c = b;
+                            ci = bi;
+                            b = a;
+                            bi = ai;
+                            a = maxNum;
+                            ai = maxT;
+                        } else if (maxNum > b) {
+                            c = b;
+                            ci = bi;
+                            b = maxNum;
+                            bi = maxT;
+                        } else if (maxNum > c) {
+                            c = maxNum;
+                            ci = maxT;
+                        }
+                    }
+          
+                    groupMaxScoreChefIndex[index] = ai;
+                    groupMaxScoreChefIndex[index + 1] = bi;
+                    groupMaxScoreChefIndex[index + 2] = ci;
+
+                    groupMaxScore[index] = a;
+                    groupMaxScore[index + 1] = b;
+                    groupMaxScore[index + 2] = c;
+
+                    for (var r1: i32 = 0; r1 < ownPresenceChefCount; r1++) {
+                        var r : i32= r1 + ownChefCount;
+                        var equipCount: i32 = chefEquipCount[r];
+                        var start: i32 = tAdd;
+                        var end: i32 = tAdd + equipCount + 1;
+                        var maxNum: i32 = 0;
+                        var maxT: i32 = 0;
+
+                        for (var t: i32 = start; t < end; t++) {
+                            if (!(scoreCache[t * recipeCount + i] == 0 || scoreCache[t * recipeCount + j] == 0 || scoreCache[t * recipeCount + k] == 0)) {
+                                let num = scoreCache[t * recipeCount + i] + scoreCache[t * recipeCount + j] + scoreCache[t * recipeCount + k];
+                                if (num > maxNum) {
+                                    maxNum = num;
+                                    maxT = t;
+                                }
+                            }
+                        }
+                        tAdd = end;
+
+                        let chefScoreIndex : i32 = index + 3 + r1;
+                        groupMaxScoreChefIndex[chefScoreIndex] = maxT;
+                        groupMaxScore[chefScoreIndex] = maxNum;
+                    }
+                }
+
+`
+    });
+
+    // 创建计算管线
+    const computePipeline = device.createComputePipeline({
+        layout: "auto",
+        compute: {
+            module: shaderModule,
+            entryPoint: "main"
+        }
+    });
+
+    // 创建绑定组
+    const bindGroup = device.createBindGroup({
+        layout: computePipeline.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: { buffer: scoreCacheBuffer } },
+            { binding: 1, resource: { buffer: chefEquipCountBuffer } },
+            { binding: 2, resource: { buffer: groupMaxScoreBuffer } },
+            { binding: 3, resource: { buffer: groupMaxScoreChefIndexBuffer } }
+
+        ]
+    });
+
+    // 计算 dispatch 大小
+
+    const workgroupSize = 64;
+    const dispatchCount = Math.ceil(maxIndex / workgroupSize);
+
+    // 提交计算任务
+    const commandEncoder = device.createCommandEncoder();
+    const passEncoder = commandEncoder.beginComputePass();
+    passEncoder.setPipeline(computePipeline);
+    passEncoder.setBindGroup(0, bindGroup);
+    passEncoder.dispatchWorkgroups(dispatchCount);
+    passEncoder.end();
+
+    // 读取结果
+    const resultBuffer1 = device.createBuffer({
+        size: outputSize,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+    });
+    const resultBuffer2 = device.createBuffer({
+        size: outputSize,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+    });
+    const resultBuffer3 = device.createBuffer({
+        size: outputSize,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+    });
+    commandEncoder.copyBufferToBuffer(groupMaxScoreBuffer, 0, resultBuffer1, 0, outputSize);
+    commandEncoder.copyBufferToBuffer(groupMaxScoreChefIndexBuffer, 0, resultBuffer2, 0, outputSize);
+   // commandEncoder.copyBufferToBuffer(testData, 0, resultBuffer3, 0, outputSize);
+    device.queue.submit([commandEncoder.finish()]);
+
+    await resultBuffer1.mapAsync(GPUMapMode.READ);
+    await resultBuffer2.mapAsync(GPUMapMode.READ);
+  //  await resultBuffer3.mapAsync(GPUMapMode.READ);
+    const groupMaxScore = new Int32Array(resultBuffer1.getMappedRange().slice());
+    const groupMaxScoreChefIndex = new Int32Array(resultBuffer2.getMappedRange().slice());
+    //const testDataResult = new Int32Array(resultBuffer3.getMappedRange().slice());
+    resultBuffer1.unmap();
+    resultBuffer2.unmap();
+   // resultBuffer3.unmap();
+    //console.log(testDataResult)
+    return { groupMaxScore, groupMaxScoreChefIndex };
+}
+
 
 let chefAndRecipeThread = new ChefAndRecipeThread();
