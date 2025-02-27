@@ -115,10 +115,10 @@ class ChefAndRecipeThread {
 
 
 
-         // let result2 = this.calAllCache(scoreCache, recipeCount
+         // let result3 = this.calAllCache(scoreCache, recipeCount
          //     , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
 
-        // console.log(calAllCache1.groupMaxScoreChefIndex)
+        //console.log(result2.groupMaxScoreChefIndex)
 
         console.time('计算每三道菜最高得分的厨师')
         let result2 = await computeWithWebGPU(scoreCache, recipeCount
@@ -127,13 +127,15 @@ class ChefAndRecipeThread {
 
         //验证结果
         // for (let i = 0; i < result2.groupMaxScore.length; i++) {
-        //     if (result2.groupMaxScore[i]!==result2.groupMaxScore[i]){
+        //     if (result3.groupMaxScore[i]!==result2.groupMaxScore[i]){
+        //         //debugger
         //         console.log("结果不正确")
         //     }
         // }
         //
         // for (let i = 0; i < result2.groupMaxScore.length; i++) {
-        //     if (result2.groupMaxScoreChefIndex[i]!==result2.groupMaxScoreChefIndex[i]){
+        //     if (result3.groupMaxScoreChefIndex[i]!==result2.groupMaxScoreChefIndex[i]){
+        //         debugger
         //         console.log("结果不正确")
         //     }
         // }
@@ -176,7 +178,8 @@ class ChefAndRecipeThread {
 
         const temp = this.playRecipes;
         const chefT = this.presenceChefCount + 3;
-        let playRecipes = new Int32Array(temp.length * 1680);
+       // let playRecipes = new Int32Array(temp.length * 1680);
+        let playRecipes = new Uint16Array(temp.length * 1680);
         for (let i = start; i < limit; i++) {
             const index = i * 9;
             for (let k = 0; k < 1680; k++) {
@@ -441,6 +444,7 @@ async function computeWithWebGPU(
             size: outputSize,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
         });
+        //这里是否可以用2字节
         const groupMaxScoreChefIndexBuffer = device.createBuffer({
             size: outputSize,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
@@ -455,28 +459,28 @@ async function computeWithWebGPU(
                 @group(0) @binding(3) var<storage, read_write> groupMaxScoreChefIndex: array<i32>;
          
          fn calI(i: i32, N: i32) -> i32 {
-    let i_f32 = f32(i);
-    let N_f32 = f32(N);
-    let term1 = i_f32 * (i_f32 - 1.0) * (i_f32 - 3.0 * N_f32 - 2.0) / 6.0;
-    let term2 = i_f32 * N_f32 * (N_f32 + 1.0) / 2.0;
-    return i32(term1 + term2);
-}
+            let i_f32 = i;
+            let N_f32 = N;
+            let term1 = i_f32 * (i_f32 - 1) * (i_f32 - 3 * N_f32 - 2) / 6;
+            let term2 = i_f32 * N_f32 * (N_f32 + 1) / 2;
+            return term1 + term2;
+        }
 
 // Function to calculate calJ (translated from JS)
 fn calJ(i: i32, j: i32, N: i32) -> i32 {
-    let count = f32(j - i);
-    let start = f32(N - i - 2);
-    let end = start - count + 1.0;
-    return i32((start + end) * count / 2.0);
+    let count = j - i;
+    let start = N - i - 2;
+    let end = start - count + 1;
+    return (start + end) * count / 2;
 }
 
 // Function to calculate getIndex (translated from JS)
-fn getIndex(i: i32, j: i32, k: i32, recipeCount: i32) -> i32 {
-    let c1 = calI(i, recipeCount - 2);
-    let c2 = calJ(i, j - 1, recipeCount);
-    let c3 = k - j - 1;
-    return c1 + c2 + c3;
-}
+        fn getIndex(i: i32, j: i32, k: i32, recipeCount: i32) -> i32 {
+            let c1 = calI(i, recipeCount - 2);
+            let c2 = calJ(i, j - 1, recipeCount);
+            let c3 = k - j - 1;
+            return c1 + c2 + c3;
+        }
                 
                 @compute @workgroup_size(256)
                 fn main(@builtin(global_invocation_id) globalIndex: vec3<u32>) {
@@ -486,23 +490,26 @@ fn getIndex(i: i32, j: i32, k: i32, recipeCount: i32) -> i32 {
                            let ownPresenceChefCount : i32= ${ownPresenceChefCount};
                              let queueDeep : i32 = ${(3 + ownPresenceChefCount)};
                              
-                    let maxIndex : i32 = recipeCount * recipeCount * recipeCount;
-                    let r2 : i32 = recipeCount * recipeCount;
-
-                    var rawIndex : i32 = i32(globalIndex.x);
-                    if (rawIndex >= maxIndex * (3 + ownPresenceChefCount)) {
+                    let maxIndex: i32 = recipeCount * recipeCount * recipeCount;
+                    let r2: i32 = recipeCount * recipeCount;
+                
+                    // Compute rawIndex using x, y, z dimensions
+                    let rawIndex: i32 = i32(globalIndex.x + globalIndex.y * 65535u * 256u + globalIndex.z * 65535u * 256u * 4u);
+                
+                    if (rawIndex >= maxIndex) {
                         return;
                     }
-
-                    let i : i32 = rawIndex / r2;
-                    let j : i32  = (rawIndex % r2) / recipeCount;
-                    let k : i32 = rawIndex % recipeCount;
-
-                    if ( i >= j || j >= k ){
+                
+                    let i: i32 = rawIndex / r2;
+                    let j: i32 = (rawIndex % r2) / recipeCount;
+                    let k: i32 = rawIndex % recipeCount;
+                
+                    if (i >= j || j >= k) {
                         return;
                     }
                     
                     let index = getIndex(i,j,k,recipeCount) * queueDeep;
+                    
                     var a: i32 = 0;
                     var b: i32 = 0;
                     var c: i32 = 0;
@@ -607,15 +614,24 @@ fn getIndex(i: i32, j: i32, k: i32, recipeCount: i32) -> i32 {
 
         // 计算 dispatch 大小
 
+        // Calculate total threads based on shader logic
+        const totalThreads = recipeCount ** 3;
         const workgroupSize = 256;
-        const dispatchCount = Math.ceil(maxIndex / workgroupSize);
+        const totalWorkgroups = Math.ceil(totalThreads / workgroupSize);
+        const maxWorkgroupsPerDimension = 65535;
+
+// Distribute workgroups across x and y dimensions
+        let dispatchX = Math.min(totalWorkgroups, maxWorkgroupsPerDimension);
+        let dispatchY = Math.ceil(totalWorkgroups / dispatchX);
+
+
 
         // 提交计算任务
         const commandEncoder = device.createCommandEncoder();
         const passEncoder = commandEncoder.beginComputePass();
         passEncoder.setPipeline(computePipeline);
         passEncoder.setBindGroup(0, bindGroup);
-        passEncoder.dispatchWorkgroups(dispatchCount);
+        passEncoder.dispatchWorkgroups(dispatchX, dispatchY);
         passEncoder.end();
 
         // 读取结果
