@@ -113,20 +113,19 @@ class ChefAndRecipeThread {
          * 定位索引
          * */
 
-      //  (j-i) * i;
 
-         let result2 = this.calAllCache(scoreCache, recipeCount
-             , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+
+         // let result2 = this.calAllCache(scoreCache, recipeCount
+         //     , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
 
         // console.log(calAllCache1.groupMaxScoreChefIndex)
 
         console.time('计算每三道菜最高得分的厨师')
-        // let result2 = await computeWithWebGPU(scoreCache, recipeCount
-        //     , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+        let result2 = await computeWithWebGPU(scoreCache, recipeCount
+            , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
         console.timeEnd('计算每三道菜最高得分的厨师')
 
         //验证结果
-
         // for (let i = 0; i < result2.groupMaxScore.length; i++) {
         //     if (result2.groupMaxScore[i]!==result2.groupMaxScore[i]){
         //         console.log("结果不正确")
@@ -192,9 +191,15 @@ class ChefAndRecipeThread {
         for (let t = 0; t < playRecipes.length; t += 9) {
             //这里等于是根据三个菜谱的id 判断出来三个菜组合得分的索引位置
 
-            score1Index = playRecipes[t + 0] * r2 + playRecipes[t + 1] * recipeCount + playRecipes[t + 2];
-            score2Index = playRecipes[t + 3] * r2 + playRecipes[t + 4] * recipeCount + playRecipes[t + 5];
-            score3Index = playRecipes[t + 6] * r2 + playRecipes[t + 7] * recipeCount + playRecipes[t + 8];
+
+            score1Index = getIndex(playRecipes[t + 0],playRecipes[t + 1],playRecipes[t + 2],recipeCount);
+            score2Index = getIndex(playRecipes[t + 3],playRecipes[t + 4],playRecipes[t + 5],recipeCount);
+            score3Index = getIndex(playRecipes[t + 6],playRecipes[t + 7],playRecipes[t + 8],recipeCount);
+
+
+            // score1Index = playRecipes[t + 0] * r2 + playRecipes[t + 1] * recipeCount + playRecipes[t + 2];
+            // score2Index = playRecipes[t + 3] * r2 + playRecipes[t + 4] * recipeCount + playRecipes[t + 5];
+            // score3Index = playRecipes[t + 6] * r2 + playRecipes[t + 7] * recipeCount + playRecipes[t + 8];
 
             score1Index = score1Index * chefT;
             score2Index = score2Index * chefT;
@@ -274,20 +279,19 @@ class ChefAndRecipeThread {
     }
 
     calAllCache(scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount) {
-        let maxIndex = recipeCount * recipeCount * recipeCount;
-
+        let maxIndex = calI(recipeCount - 2, recipeCount - 2);
+        console.log(maxIndex,recipeCount*recipeCount*recipeCount)
         const groupMaxScore = new Int32Array(maxIndex * (3 + ownPresenceChefCount));
         const groupMaxScoreChefIndex = new Int32Array(maxIndex * (3 + ownPresenceChefCount))
 
         console.time("计算每三道菜最高得分的厨师")
 
-
-        const r2 = recipeCount * recipeCount;
         let index = 0;
+        const r2 = recipeCount * recipeCount;
         for (let i = 0; i < recipeCount; i++) {
             for (let j = i + 1; j < recipeCount; j++) {
                 for (let k = j + 1; k < recipeCount; k++) {
-                    index = i * r2 + j * recipeCount + k;
+                    index = getIndex(i,j,k,recipeCount);
                     index = index * (3 + ownPresenceChefCount);
                     //每一组菜谱组合，计算得分最高的3个厨师
                     let a = 0, b = 0, c = 0, ai = 0, bi = 0, ci = 0;
@@ -431,7 +435,7 @@ async function computeWithWebGPU(
 
 
     // 创建输出缓冲区
-    const maxIndex = recipeCount * recipeCount * recipeCount;
+    const maxIndex =  calI(recipeCount - 2, recipeCount - 2);
     const outputSize = maxIndex * (3 + ownPresenceChefCount) * 4; // Int32Array 的字节大小
     const groupMaxScoreBuffer = device.createBuffer({
         size: outputSize,
@@ -454,6 +458,29 @@ async function computeWithWebGPU(
                 @group(0) @binding(2) var<storage, read_write> groupMaxScore: array<i32>;
                 @group(0) @binding(3) var<storage, read_write> groupMaxScoreChefIndex: array<i32>;
          
+         fn calI(i: i32, N: i32) -> i32 {
+    let i_f32 = f32(i);
+    let N_f32 = f32(N);
+    let term1 = i_f32 * (i_f32 - 1.0) * (i_f32 - 3.0 * N_f32 - 2.0) / 6.0;
+    let term2 = i_f32 * N_f32 * (N_f32 + 1.0) / 2.0;
+    return i32(term1 + term2);
+}
+
+// Function to calculate calJ (translated from JS)
+fn calJ(i: i32, j: i32, N: i32) -> i32 {
+    let count = f32(j - i);
+    let start = f32(N - i - 2);
+    let end = start - count + 1.0;
+    return i32((start + end) * count / 2.0);
+}
+
+// Function to calculate getIndex (translated from JS)
+fn getIndex(i: i32, j: i32, k: i32, recipeCount: i32) -> i32 {
+    let c1 = calI(i, recipeCount - 2);
+    let c2 = calJ(i, j - 1, recipeCount);
+    let c3 = k - j - 1;
+    return c1 + c2 + c3;
+}
                 
                 @compute @workgroup_size(64)
                 fn main(@builtin(global_invocation_id) globalIndex: vec3<u32>) {
@@ -466,20 +493,20 @@ async function computeWithWebGPU(
                     let maxIndex : i32 = recipeCount * recipeCount * recipeCount;
                     let r2 : i32 = recipeCount * recipeCount;
 
-                    var index : i32 = i32(globalIndex.x);
-                    if (index >= maxIndex * (3 + ownPresenceChefCount)) {
+                    var rawIndex : i32 = i32(globalIndex.x);
+                    if (rawIndex >= maxIndex * (3 + ownPresenceChefCount)) {
                         return;
                     }
 
-                    let i : i32 = index / r2;
-                    let j : i32  = (index % r2) / recipeCount;
-                    let k : i32 = index % recipeCount;
+                    let i : i32 = rawIndex / r2;
+                    let j : i32  = (rawIndex % r2) / recipeCount;
+                    let k : i32 = rawIndex % recipeCount;
 
                     if ( i >= j || j >= k ){
                         return;
                     }
                     
-                    index = index * queueDeep;
+                    let index = getIndex(i,j,k,recipeCount) * queueDeep;
                     var a: i32 = 0;
                     var b: i32 = 0;
                     var c: i32 = 0;
@@ -624,6 +651,13 @@ async function computeWithWebGPU(
     // resultBuffer3.unmap();
     //console.log(testDataResult)
     return {groupMaxScore, groupMaxScoreChefIndex};
+}
+
+function getIndex(i, j,k, recipeCount) {
+    let c1 = calI(i, recipeCount - 2); // calI后边改成查表
+    let c2 = calJ(i, j - 1, recipeCount); //这里计算
+    let c3 = k - j - 1;
+    return c1+c2+c3;
 }
 
 function calI(i, N) {
