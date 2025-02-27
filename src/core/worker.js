@@ -399,55 +399,57 @@ async function computeWithWebGPU(
     scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount
 ) {
     const device = await this.initWebGPU();
+    try {
+
 
 // 创建输入缓冲区
-    const scoreCacheBuffer = device.createBuffer({
-        size: scoreCache.byteLength,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        const scoreCacheBuffer = device.createBuffer({
+            size: scoreCache.byteLength,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
 
-    });
-    device.queue.writeBuffer(scoreCacheBuffer, 0, scoreCache);
-
-
-    const chefEquipCountBuffer = device.createBuffer({
-        size: chefEquipCount.byteLength,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-
-    });
-
-    device.queue.writeBuffer(chefEquipCountBuffer, 0, chefEquipCount);
+        });
+        device.queue.writeBuffer(scoreCacheBuffer, 0, scoreCache);
 
 
-    // 创建 uniform 缓冲区存储参数
-    const params = new Uint32Array([
-        recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount
-    ]);
-    const paramsBuffer = device.createBuffer({
-        size: params.byteLength,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        const chefEquipCountBuffer = device.createBuffer({
+            size: chefEquipCount.byteLength,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
 
-    });
-    // new Uint32Array(paramsBuffer.getMappedRange()).set(params);
-    // paramsBuffer.unmap();
-    device.queue.writeBuffer(paramsBuffer, 0, params);
+        });
+
+        device.queue.writeBuffer(chefEquipCountBuffer, 0, chefEquipCount);
 
 
-    // 创建输出缓冲区
-    const maxIndex =  calI(recipeCount - 2, recipeCount - 2);
-    const outputSize = maxIndex * (3 + ownPresenceChefCount) * 4; // Int32Array 的字节大小
-    const groupMaxScoreBuffer = device.createBuffer({
-        size: outputSize,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
-    });
-    const groupMaxScoreChefIndexBuffer = device.createBuffer({
-        size: outputSize,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
-    });
+        // 创建 uniform 缓冲区存储参数
+        const params = new Uint32Array([
+            recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount
+        ]);
+        const paramsBuffer = device.createBuffer({
+            size: params.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+
+        });
+        // new Uint32Array(paramsBuffer.getMappedRange()).set(params);
+        // paramsBuffer.unmap();
+        device.queue.writeBuffer(paramsBuffer, 0, params);
 
 
-    // 创建着色器模块
-    const shaderModule = device.createShaderModule({
-        code: ` @group(0) @binding(0) var<storage, read> scoreCache: array<i32>;
+        // 创建输出缓冲区
+        const maxIndex =  calI(recipeCount - 2, recipeCount - 2);
+        const outputSize = maxIndex * (3 + ownPresenceChefCount) * 4; // Int32Array 的字节大小
+        const groupMaxScoreBuffer = device.createBuffer({
+            size: outputSize,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+        });
+        const groupMaxScoreChefIndexBuffer = device.createBuffer({
+            size: outputSize,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+        });
+
+
+        // 创建着色器模块
+        const shaderModule = device.createShaderModule({
+            code: ` @group(0) @binding(0) var<storage, read> scoreCache: array<i32>;
                 @group(0) @binding(1) var<storage, read> chefEquipCount: array<i32>;
                 @group(0) @binding(2) var<storage, read_write> groupMaxScore: array<i32>;
                 @group(0) @binding(3) var<storage, read_write> groupMaxScoreChefIndex: array<i32>;
@@ -580,78 +582,82 @@ fn getIndex(i: i32, j: i32, k: i32, recipeCount: i32) -> i32 {
                 }
 
 `
-    });
+        });
 
-    // 创建计算管线
-    const computePipeline = device.createComputePipeline({
-        layout: "auto",
-        compute: {
-            module: shaderModule,
-            entryPoint: "main"
-        }
-    });
+        // 创建计算管线
+        const computePipeline = device.createComputePipeline({
+            layout: "auto",
+            compute: {
+                module: shaderModule,
+                entryPoint: "main"
+            }
+        });
 
-    // 创建绑定组
-    const bindGroup = device.createBindGroup({
-        layout: computePipeline.getBindGroupLayout(0),
-        entries: [
-            {binding: 0, resource: {buffer: scoreCacheBuffer}},
-            {binding: 1, resource: {buffer: chefEquipCountBuffer}},
-            {binding: 2, resource: {buffer: groupMaxScoreBuffer}},
-            {binding: 3, resource: {buffer: groupMaxScoreChefIndexBuffer}}
+        // 创建绑定组
+        const bindGroup = device.createBindGroup({
+            layout: computePipeline.getBindGroupLayout(0),
+            entries: [
+                {binding: 0, resource: {buffer: scoreCacheBuffer}},
+                {binding: 1, resource: {buffer: chefEquipCountBuffer}},
+                {binding: 2, resource: {buffer: groupMaxScoreBuffer}},
+                {binding: 3, resource: {buffer: groupMaxScoreChefIndexBuffer}}
 
-        ]
-    });
+            ]
+        });
 
-    // 计算 dispatch 大小
+        // 计算 dispatch 大小
 
-    const workgroupSize = 256;
-    const dispatchCount = Math.ceil(maxIndex / workgroupSize);
+        const workgroupSize = 256;
+        const dispatchCount = Math.ceil(maxIndex / workgroupSize);
 
-    // 提交计算任务
-    const commandEncoder = device.createCommandEncoder();
-    const passEncoder = commandEncoder.beginComputePass();
-    passEncoder.setPipeline(computePipeline);
-    passEncoder.setBindGroup(0, bindGroup);
-    passEncoder.dispatchWorkgroups(dispatchCount);
-    passEncoder.end();
+        // 提交计算任务
+        const commandEncoder = device.createCommandEncoder();
+        const passEncoder = commandEncoder.beginComputePass();
+        passEncoder.setPipeline(computePipeline);
+        passEncoder.setBindGroup(0, bindGroup);
+        passEncoder.dispatchWorkgroups(dispatchCount);
+        passEncoder.end();
 
-    // 读取结果
-    const resultBuffer1 = device.createBuffer({
-        size: outputSize,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-    });
-    const resultBuffer2 = device.createBuffer({
-        size: outputSize,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-    });
+        // 读取结果
+        const resultBuffer1 = device.createBuffer({
+            size: outputSize,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+        });
+        const resultBuffer2 = device.createBuffer({
+            size: outputSize,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+        });
 
-    commandEncoder.copyBufferToBuffer(groupMaxScoreBuffer, 0, resultBuffer1, 0, outputSize);
-    commandEncoder.copyBufferToBuffer(groupMaxScoreChefIndexBuffer, 0, resultBuffer2, 0, outputSize);
-    // commandEncoder.copyBufferToBuffer(testData, 0, resultBuffer3, 0, outputSize);
-    device.queue.submit([commandEncoder.finish()]);
+        commandEncoder.copyBufferToBuffer(groupMaxScoreBuffer, 0, resultBuffer1, 0, outputSize);
+        commandEncoder.copyBufferToBuffer(groupMaxScoreChefIndexBuffer, 0, resultBuffer2, 0, outputSize);
+        // commandEncoder.copyBufferToBuffer(testData, 0, resultBuffer3, 0, outputSize);
+        device.queue.submit([commandEncoder.finish()]);
 
-    await resultBuffer1.mapAsync(GPUMapMode.READ);
-    await resultBuffer2.mapAsync(GPUMapMode.READ);
-    //  await resultBuffer3.mapAsync(GPUMapMode.READ);
-    const groupMaxScore = new Int32Array(resultBuffer1.getMappedRange().slice());
-    const groupMaxScoreChefIndex = new Int32Array(resultBuffer2.getMappedRange().slice());
-    //const testDataResult = new Int32Array(resultBuffer3.getMappedRange().slice());
-    resultBuffer1.unmap();
-    resultBuffer2.unmap();
+        await resultBuffer1.mapAsync(GPUMapMode.READ);
+        await resultBuffer2.mapAsync(GPUMapMode.READ);
+        //  await resultBuffer3.mapAsync(GPUMapMode.READ);
+        const groupMaxScore = new Int32Array(resultBuffer1.getMappedRange().slice());
+        const groupMaxScoreChefIndex = new Int32Array(resultBuffer2.getMappedRange().slice());
+        //const testDataResult = new Int32Array(resultBuffer3.getMappedRange().slice());
+        resultBuffer1.unmap();
+        resultBuffer2.unmap();
 
 
-    //TODO 释放内存
-    resultBuffer1.destroy();
-    resultBuffer2.destroy();
-    groupMaxScoreBuffer.destroy();
-    groupMaxScoreChefIndexBuffer.destroy();
-    paramsBuffer.destroy();
-    chefEquipCountBuffer.destroy();
-    scoreCacheBuffer.destroy();
-    device.destroy();
-    //console.log(testDataResult)
-    return {groupMaxScore, groupMaxScoreChefIndex};
+        //TODO 释放内存
+        resultBuffer1.destroy();
+        resultBuffer2.destroy();
+        groupMaxScoreBuffer.destroy();
+        groupMaxScoreChefIndexBuffer.destroy();
+        paramsBuffer.destroy();
+        chefEquipCountBuffer.destroy();
+        scoreCacheBuffer.destroy();
+
+        return {groupMaxScore, groupMaxScoreChefIndex};
+    }finally {
+        device.destroy();
+    }
+
+
 }
 
 function getIndex(i, j,k, recipeCount) {
