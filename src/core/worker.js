@@ -381,6 +381,7 @@ async function initWebGPU() {
     const adapter = await navigator.gpu.requestAdapter();
     const device = await adapter.requestDevice({
         requiredLimits: {
+            maxBufferSize:2147483644,
             maxStorageBufferBindingSize: 2147483644 // 或adapter.limits.maxStorageBufferBindingSize
         }
     });
@@ -405,8 +406,6 @@ async function computeWithWebGPU(
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
 
     });
-    // new Int32Array(scoreCacheBuffer.getMappedRange()).set(scoreCache);
-    // scoreCacheBuffer.unmap();
     device.queue.writeBuffer(scoreCacheBuffer, 0, scoreCache);
 
 
@@ -415,8 +414,7 @@ async function computeWithWebGPU(
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
 
     });
-    // new Int32Array(chefEquipCountBuffer.getMappedRange()).set(chefEquipCount);
-    // chefEquipCountBuffer.unmap();
+
     device.queue.writeBuffer(chefEquipCountBuffer, 0, chefEquipCount);
 
 
@@ -446,10 +444,6 @@ async function computeWithWebGPU(
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
     });
 
-    const testData = device.createBuffer({
-        size: outputSize,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
-    });
 
     // 创建着色器模块
     const shaderModule = device.createShaderModule({
@@ -482,7 +476,7 @@ fn getIndex(i: i32, j: i32, k: i32, recipeCount: i32) -> i32 {
     return c1 + c2 + c3;
 }
                 
-                @compute @workgroup_size(64)
+                @compute @workgroup_size(256)
                 fn main(@builtin(global_invocation_id) globalIndex: vec3<u32>) {
                             let recipeCount : i32 = ${recipeCount};
                            let totalChefCount : i32 = ${totalChefCount};
@@ -611,7 +605,7 @@ fn getIndex(i: i32, j: i32, k: i32, recipeCount: i32) -> i32 {
 
     // 计算 dispatch 大小
 
-    const workgroupSize = 64;
+    const workgroupSize = 256;
     const dispatchCount = Math.ceil(maxIndex / workgroupSize);
 
     // 提交计算任务
@@ -631,10 +625,7 @@ fn getIndex(i: i32, j: i32, k: i32, recipeCount: i32) -> i32 {
         size: outputSize,
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
     });
-    const resultBuffer3 = device.createBuffer({
-        size: outputSize,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-    });
+
     commandEncoder.copyBufferToBuffer(groupMaxScoreBuffer, 0, resultBuffer1, 0, outputSize);
     commandEncoder.copyBufferToBuffer(groupMaxScoreChefIndexBuffer, 0, resultBuffer2, 0, outputSize);
     // commandEncoder.copyBufferToBuffer(testData, 0, resultBuffer3, 0, outputSize);
@@ -648,7 +639,17 @@ fn getIndex(i: i32, j: i32, k: i32, recipeCount: i32) -> i32 {
     //const testDataResult = new Int32Array(resultBuffer3.getMappedRange().slice());
     resultBuffer1.unmap();
     resultBuffer2.unmap();
-    // resultBuffer3.unmap();
+
+
+    //TODO 释放内存
+    resultBuffer1.destroy();
+    resultBuffer2.destroy();
+    groupMaxScoreBuffer.destroy();
+    groupMaxScoreChefIndexBuffer.destroy();
+    paramsBuffer.destroy();
+    chefEquipCountBuffer.destroy();
+    scoreCacheBuffer.destroy();
+    device.destroy();
     //console.log(testDataResult)
     return {groupMaxScore, groupMaxScoreChefIndex};
 }
