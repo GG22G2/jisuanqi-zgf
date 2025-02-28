@@ -272,12 +272,13 @@ class GodInference {
         const finalMaterialCount = ingredientLimit.getFinalMaterialCount();
 
         let recipeCounts = new Int32Array(2000)
-        this.calQuantity(recipeCounts, finalMaterialCount);
+        this.calQuantity(recipeCounts, finalMaterialCount,false);
 
         //this.sortOfPrice(recipeCounts, this.tempOwnRecipes);
         this.estimatedPriceAndSort(recipeCounts, this.tempOwnRecipes);
         this.tempOwnRecipes = this.tempOwnRecipes.slice(0, Math.min(this.recipeLimit, this.tempOwnRecipes.length));
-        this.recipePermutation(1, [], ingredientLimit);
+        let ignoreRecipeId = new Set();
+        this.recipePermutation(1, [], ingredientLimit,ignoreRecipeId);
 
         let maxScore = 0;
         for (let i = this.playRecipeGroup.length - 1; i >= 0; i--) {
@@ -482,33 +483,46 @@ class GodInference {
      * @param index 菜谱序号1-9 代表1到9号位
      * @param play 9个菜谱的集合
      * @param ingredientLimit 剩余食材
+     * @param ignoreRecipeId : Set 忽略的菜谱id
      *
      * */
-    recipePermutation(index, play, ingredientLimit) {
+    recipePermutation(index, play, ingredientLimit,ignoreRecipeId) {
         if (index === 10) {
             this.playRecipeGroup.push(play);
             return;
         }
 
-        const limit = this.deepLimit[index];
+        const limit =Math.min(this.deepLimit[index],this.tempOwnRecipes.length - ignoreRecipeId.size) ;
 
         //拷贝食材数量
         const finalMaterialCount = ingredientLimit.getFinalMaterialCount();
         let recipeCounts = new Int32Array(2000)
         //计算奖励倍数加持下,根据剩余食材计算各个菜最多做多少份
         this.calQuantity(recipeCounts, finalMaterialCount);
+        //debugger
+        let priceAscResult =  this.sortOfPrice(recipeCounts, this.tempOwnRecipes,ignoreRecipeId,index===6);
 
+        let firstScore =  priceAscResult[priceAscResult.length - 1];
+        if (firstScore===0n){
+            return;
+        }
 
         const removes = [];
         for (let i = 0; i < limit; i++) {
             //根据份数计算得分，并降序排列返回
-            this.sortOfPrice(recipeCounts, this.tempOwnRecipes);
-            const selectRecipe = this.tempOwnRecipes.shift();
-            removes.push(selectRecipe);
-            const quantity = recipeCounts[selectRecipe.recipeId];
+
+            let priceIdAndScore =  priceAscResult[priceAscResult.length - i - 1];
+            let recipeId  = Number(priceIdAndScore & 0xFFFFFFFFn);
+            let score  = Number((priceIdAndScore>>32n) & 0xFFFFFFFFn);
+            ignoreRecipeId.add(recipeId)
+
+            const quantity = recipeCounts[recipeId];
             if (quantity === 0) {
                 continue;
             }
+
+
+            removes.push(recipeId);
 
             const newPlayRecipes = new Array(9);
 
@@ -516,45 +530,72 @@ class GodInference {
                 newPlayRecipes[j] = play[j];
             }
 
+            let selectRecipe = this.officialGameData.recipeHashMap.get(recipeId)
+            // if (index===9){
+            //     debugger
+            // }
+            ///console.log(selectRecipe.name,score)
             //修改食材库存
             ingredientLimit.cookingQuantity(selectRecipe, quantity);
 
             newPlayRecipes[index - 1] = new PlayRecipe(selectRecipe, quantity);
-            this.recipePermutation(index + 1, newPlayRecipes, ingredientLimit);
+            this.recipePermutation(index + 1, newPlayRecipes, ingredientLimit,ignoreRecipeId);
             ingredientLimit.setMaterialCount(finalMaterialCount);
         }
 
-        for (let it = 0; it < removes.length; it++) {
-            this.tempOwnRecipes.push(removes[it]);
+        for (let remove of removes) {
+            ignoreRecipeId.delete(remove);
         }
+
+
     }
 
     /**
      * @param  materialCount 各种食材的剩余数量,数组下标对应食材的id
      * @return
      */
-    calQuantity(counts, materialCount) {
+    calQuantity(counts, materialCount,debugerF) {
         const maxEquipLimit = this.globalAddtion.maxequiplimit;
         const length = this.tempOwnRecipes.length;
         for (let i = 0; i < length; i++) {
             let ownRecipe = this.tempOwnRecipes[i];
+
+            // if (ownRecipe.name==='跷脚牛肉'&&debugerF){
+            //  debugger
+            // }
+
             const count = IngredientLimit.cookingQuantity(ownRecipe.materials2, ownRecipe.limit + maxEquipLimit[ownRecipe.rarity], materialCount);
             counts[ownRecipe.recipeId] = count;
         }
         return counts;
     }
 
-    sortOfPrice(quantity, recipes, limit) {
+    /**
+     * @param ignoreRecipeId : Set
+     * */
+    sortOfPrice(quantity, recipes, ignoreRecipeId,debugerF) {
+        let result = new BigUint64Array(recipes.length - ignoreRecipeId.size);
+        let resultIndex =  0;
         for (let i = 0; i < recipes.length; i++) {
             let ownRecipe = recipes[i];
+            if (ignoreRecipeId.has(ownRecipe.recipeId)){
+                continue
+            }
             const reward = this.recipeReward[ownRecipe.recipeId];
-            ownRecipe.computedPrice = ownRecipe.price * (1 + reward) * quantity[ownRecipe.recipeId];
+            //ownRecipe.computedPrice = ownRecipe.price * (1 + reward) * quantity[ownRecipe.recipeId];
+            let  computedPrice = ownRecipe.price * (1 + reward) * quantity[ownRecipe.recipeId];
+            if (computedPrice===0){
+                continue
+            }
+            // if (ownRecipe.name==='跷脚牛肉'&&debugerF){
+            //     debugger
+            // }
+            result[resultIndex++] =  BigInt(computedPrice|0 )<< 32n | BigInt(ownRecipe.recipeId)
         }
 
-        //返回每个菜对应的索引位置
-        recipes.sort((r1, r2) => {
-            return r2.computedPrice - r1.computedPrice;
-        });
+        result.sort()
+        return result;
+
     }
 
     buildRecipeTags() {
@@ -609,7 +650,6 @@ class GodInference {
             let chefList = createPartialSkillChef(this.officialGameData, ownChef, ownChefs)
             console.log("在场生效技能，扩展厨师", chefList)
             //新生成的厨师要做出来
-
 
             presenceChefs.push(...chefList)
         }
@@ -836,6 +876,16 @@ class TempCalCacheBuilder {
 
         let recipeCount = this.tempCalCache.recipeCount
         let scoreCache = this.tempCalCache.scoreCache;
+
+        //todo 待确定是否实现
+        //针对每制作一种类的技能，需要扩展单份分数的缓存，
+        //每制作一种神级料理场上厨师蒸售价+10%
+        //每制作一种神级料理菜谱基础售价+5%
+        //每制作一种传级料理在场切售价+8%
+        //每制作一种神级料理场上厨师炸售价+10%
+        //400个菜谱，40000种厨师(带厨具)，只计算一组scoreCache得分，是61M内存，不带出局就是0.6m。这样的话计算10份也就600内存，
+        //目前游戏里一共有4种这类技能，也就是要240m内存足够
+
 
         //各个品质对应的加成
         for (let i = 0; i < playChefs.length; i++) {

@@ -40,7 +40,7 @@
                 style="width: 140px"
                 :step="10"
                 :min="30"
-                :max="200"
+                :max="300"
             >
             </el-input-number>
           </el-row>
@@ -260,7 +260,7 @@ export default {
       if (oldRule) {
         return JSON.parse(oldRule);
       }
-      let ruleStr = await (await fetch(`https://bcjh.xyz/api/get_rule?time=${ruleTime}`)).json();
+      let ruleStr = await (await fetch(`https://h5.baochaojianghu.com/api/get_rule?time=${ruleTime}`)).json();
       localStorage.setItem(ruleTime, JSON.stringify(ruleStr));
       return ruleStr;
     },
@@ -285,7 +285,7 @@ export default {
       return parseData(gameData, myGameData, this.calConfig);
     },
     async initRuleSelected() {
-      let data = await (await fetch('https://bcjh.xyz/api/get_etc_rule')).json();
+      let data = await (await fetch('https://h5.baochaojianghu.com/api/get_etc_rule')).json();
       //如果是周五下午到周日22点，则尝试获取本周的厨神数据
       let curWeekRuleResult = await this.getCurrentWeekRule();
 
@@ -324,7 +324,7 @@ export default {
       let endTime = startTime + 205200000;
       let curWeekRule = null;
       if (curTime >= startTime && curTime <= endTime) {
-        curWeekRule = await (await fetch('https://bcjh.xyz/api/get_rule')).json();
+        curWeekRule = await (await fetch('https://h5.baochaojianghu.com/api/get_rule')).json();
         this.curWeekRule = curWeekRule;
         return true;
       }
