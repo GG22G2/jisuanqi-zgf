@@ -177,7 +177,7 @@ class ChefAndRecipeThread {
         let chefRealIndex = this.chefRealIndex;
 
         const temp = this.playRecipes;
-        const chefT = this.presenceChefCount + 3;
+
        // let playRecipes = new Int32Array(temp.length * 1680);
         let playRecipes = new Uint16Array(temp.length * 1680);
         for (let i = start; i < limit; i++) {
@@ -190,19 +190,14 @@ class ChefAndRecipeThread {
             }
         }
 
-        const r2 = recipeCount * recipeCount;
+        const chefT = this.presenceChefCount + 3;
+        //这一部分应该也可以交给gpu计算
+        //可以保存结果每组菜谱的最大分，最后在cpu中计算最大分
         for (let t = 0; t < playRecipes.length; t += 9) {
             //这里等于是根据三个菜谱的id 判断出来三个菜组合得分的索引位置
-
-
             score1Index = getIndex(playRecipes[t + 0],playRecipes[t + 1],playRecipes[t + 2],recipeCount);
             score2Index = getIndex(playRecipes[t + 3],playRecipes[t + 4],playRecipes[t + 5],recipeCount);
             score3Index = getIndex(playRecipes[t + 6],playRecipes[t + 7],playRecipes[t + 8],recipeCount);
-
-
-            // score1Index = playRecipes[t + 0] * r2 + playRecipes[t + 1] * recipeCount + playRecipes[t + 2];
-            // score2Index = playRecipes[t + 3] * r2 + playRecipes[t + 4] * recipeCount + playRecipes[t + 5];
-            // score3Index = playRecipes[t + 6] * r2 + playRecipes[t + 7] * recipeCount + playRecipes[t + 8];
 
             score1Index = score1Index * chefT;
             score2Index = score2Index * chefT;
@@ -241,16 +236,10 @@ class ChefAndRecipeThread {
                                     let p1 = mm1 & (m2 | m3)
                                     let p2 = mm2 & (m1 | m3)
                                     let p3 = mm3 & (m1 | m2)
-
                                     if (p1 !== mm1 || p2 !== mm2 || p3 !== mm2) {
-                                        // console.log("忽略结果")
                                         continue
                                     }
-                                    //console.log("符合结果")
                                 }
-                               // console.log(chef1, chef2, chef3)
-                               // console.log(realChef1, realChef2, realChef3)
-
                                 maxScore = score;
                                 result.maxScore = maxScore;
                                 result.maxScoreChefGroup = [chef1, chef2, chef3];
@@ -260,20 +249,8 @@ class ChefAndRecipeThread {
                     }
                 }
             }
-
-            /**
-             * 特征用bigint保存
-             * 比如无光环技能的值未0b1
-             * 有兰飞鸿技能的未0b01;
-             * 有南飞技能的为 0b10;
-             * 同时有兰飞鸿和南飞的为 0b11;
-             * 厨师b和c的特征做与运算 结果为 p1
-             * p1和 0b11做与运算，如果结果不为0b11则认为不满足条件，不往下继续进行。
-             *
-             * 厨师在场就生效的
-             * 厨师不仅要在场，还要满足其他条件的，
-             * */
         }
+        //这部分代码能放到gpu执行吗， playRecipes，groupMaxScore，groupMaxScoreChefIndex，chefRealIndex，chefMatchMasks，chefMasks都是  Int32Array,getIndex返回的是正整数
 
         endTime = Date.now();
         console.info((limit - start) + "组数据计算用时:" + (endTime - startTime) + "ms");
@@ -388,13 +365,6 @@ async function initWebGPU() {
             maxStorageBufferBindingSize: 2147483644 // 或adapter.limits.maxStorageBufferBindingSize
         }
     });
-    // device.popErrorScope().then((error) => {
-    //     if (error) {
-    //         // There was an error creating the sampler, so discard it.
-    //
-    //         console.error(`An error occurred while creating sampler: ${error.message}`);
-    //     }
-    // });
     return device;
 }
 
@@ -403,9 +373,15 @@ async function computeWithWebGPU(
 ) {
     const device = await this.initWebGPU();
     try {
+        // 创建输出缓冲区
+        const maxIndex =  calI(recipeCount - 2, recipeCount - 2);
+        const outputSize = maxIndex * (3 + ownPresenceChefCount) * 4; // Int32Array 的字节大小
 
+        let totalByteCount = outputSize + outputSize;
+        console.log("预估显存占用",totalByteCount / 1024.0 / 1024.0 / 1024.0)
+        //预估显存使用量，如果显存不够分批次计算
 
-// 创建输入缓冲区
+        // 创建输入缓冲区
         const scoreCacheBuffer = device.createBuffer({
             size: scoreCache.byteLength,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
@@ -437,9 +413,7 @@ async function computeWithWebGPU(
         device.queue.writeBuffer(paramsBuffer, 0, params);
 
 
-        // 创建输出缓冲区
-        const maxIndex =  calI(recipeCount - 2, recipeCount - 2);
-        const outputSize = maxIndex * (3 + ownPresenceChefCount) * 4; // Int32Array 的字节大小
+
         const groupMaxScoreBuffer = device.createBuffer({
             size: outputSize,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
@@ -490,7 +464,8 @@ fn calJ(i: i32, j: i32, N: i32) -> i32 {
                            let ownPresenceChefCount : i32= ${ownPresenceChefCount};
                              let queueDeep : i32 = ${(3 + ownPresenceChefCount)};
                              
-                    let maxIndex: i32 = recipeCount * recipeCount * recipeCount;
+                    //let maxIndex: i32 = recipeCount * recipeCount * recipeCount;
+                     let maxIndex: i32 = ${recipeCount * recipeCount * recipeCount};
                     let r2: i32 = recipeCount * recipeCount;
                 
                     // Compute rawIndex using x, y, z dimensions
