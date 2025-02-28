@@ -121,7 +121,7 @@ class ChefAndRecipeThread {
         //console.log(result2.groupMaxScoreChefIndex)
 
         console.time('计算每三道菜最高得分的厨师')
-        let result2 = await computeWithWebGPU(scoreCache, recipeCount
+        let result2 = await this.computeWithWebGPU(scoreCache, recipeCount
             , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
         console.timeEnd('计算每三道菜最高得分的厨师')
 
@@ -195,9 +195,9 @@ class ChefAndRecipeThread {
         //可以保存结果每组菜谱的最大分，最后在cpu中计算最大分
         for (let t = 0; t < playRecipes.length; t += 9) {
             //这里等于是根据三个菜谱的id 判断出来三个菜组合得分的索引位置
-            score1Index = getIndex(playRecipes[t + 0],playRecipes[t + 1],playRecipes[t + 2],recipeCount);
-            score2Index = getIndex(playRecipes[t + 3],playRecipes[t + 4],playRecipes[t + 5],recipeCount);
-            score3Index = getIndex(playRecipes[t + 6],playRecipes[t + 7],playRecipes[t + 8],recipeCount);
+            score1Index = this.getIndex(playRecipes[t + 0],playRecipes[t + 1],playRecipes[t + 2],recipeCount);
+            score2Index = this.getIndex(playRecipes[t + 3],playRecipes[t + 4],playRecipes[t + 5],recipeCount);
+            score3Index = this.getIndex(playRecipes[t + 6],playRecipes[t + 7],playRecipes[t + 8],recipeCount);
 
             score1Index = score1Index * chefT;
             score2Index = score2Index * chefT;
@@ -271,7 +271,7 @@ class ChefAndRecipeThread {
         for (let i = 0; i < recipeCount; i++) {
             for (let j = i + 1; j < recipeCount; j++) {
                 for (let k = j + 1; k < recipeCount; k++) {
-                    index = getIndex(i,j,k,recipeCount);
+                    index = this.getIndex(i,j,k,recipeCount);
                     index = index * (3 + ownPresenceChefCount);
                     //每一组菜谱组合，计算得分最高的3个厨师
                     let a = 0, b = 0, c = 0, ai = 0, bi = 0, ci = 0;
@@ -352,82 +352,78 @@ class ChefAndRecipeThread {
         }
     }
 
-
-}
-
-
-async function initWebGPU() {
-    if (!navigator.gpu) throw new Error("WebGPU not supported");
-    const adapter = await navigator.gpu.requestAdapter();
-    const device = await adapter.requestDevice({
-        requiredLimits: {
-            maxBufferSize:2147483644,
-            maxStorageBufferBindingSize: 2147483644 // 或adapter.limits.maxStorageBufferBindingSize
-        }
-    });
-    return device;
-}
-
-async function computeWithWebGPU(
-    scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount
-) {
-    const device = await this.initWebGPU();
-    try {
-        // 创建输出缓冲区
-        const maxIndex =  calI(recipeCount - 2, recipeCount - 2);
-        const outputSize = maxIndex * (3 + ownPresenceChefCount) * 4; // Int32Array 的字节大小
-
-        let totalByteCount = outputSize + outputSize;
-        console.log("预估显存占用",totalByteCount / 1024.0 / 1024.0 / 1024.0)
-        //预估显存使用量，如果显存不够分批次计算
-
-        // 创建输入缓冲区
-        const scoreCacheBuffer = device.createBuffer({
-            size: scoreCache.byteLength,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-
+    async  initWebGPU() {
+        if (!navigator.gpu) throw new Error("WebGPU not supported");
+        const adapter = await navigator.gpu.requestAdapter();
+        const device = await adapter.requestDevice({
+            requiredLimits: {
+                maxBufferSize:2147483644,
+                maxStorageBufferBindingSize: 2147483644 // 或adapter.limits.maxStorageBufferBindingSize
+            }
         });
-        device.queue.writeBuffer(scoreCacheBuffer, 0, scoreCache);
+        return device;
+    }
+
+    async  computeWithWebGPU(
+        scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount
+    ) {
+        const device = await this.initWebGPU();
+        try {
+            // 创建输出缓冲区
+            const maxIndex =  this.calI(recipeCount - 2, recipeCount - 2);
+            const outputSize = maxIndex * (3 + ownPresenceChefCount) * 4; // Int32Array 的字节大小
+
+            let totalByteCount = outputSize + outputSize;
+            console.log("预估显存占用",totalByteCount / 1024.0 / 1024.0 / 1024.0)
+            //预估显存使用量，如果显存不够分批次计算
+
+            // 创建输入缓冲区
+            const scoreCacheBuffer = device.createBuffer({
+                size: scoreCache.byteLength,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+
+            });
+            device.queue.writeBuffer(scoreCacheBuffer, 0, scoreCache);
 
 
-        const chefEquipCountBuffer = device.createBuffer({
-            size: chefEquipCount.byteLength,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            const chefEquipCountBuffer = device.createBuffer({
+                size: chefEquipCount.byteLength,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
 
-        });
+            });
 
-        device.queue.writeBuffer(chefEquipCountBuffer, 0, chefEquipCount);
-
-
-        // 创建 uniform 缓冲区存储参数
-        const params = new Uint32Array([
-            recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount
-        ]);
-        const paramsBuffer = device.createBuffer({
-            size: params.byteLength,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-
-        });
-        // new Uint32Array(paramsBuffer.getMappedRange()).set(params);
-        // paramsBuffer.unmap();
-        device.queue.writeBuffer(paramsBuffer, 0, params);
+            device.queue.writeBuffer(chefEquipCountBuffer, 0, chefEquipCount);
 
 
+            // 创建 uniform 缓冲区存储参数
+            const params = new Uint32Array([
+                recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount
+            ]);
+            const paramsBuffer = device.createBuffer({
+                size: params.byteLength,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 
-        const groupMaxScoreBuffer = device.createBuffer({
-            size: outputSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
-        });
-        //这里是否可以用2字节
-        const groupMaxScoreChefIndexBuffer = device.createBuffer({
-            size: outputSize,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
-        });
+            });
+            // new Uint32Array(paramsBuffer.getMappedRange()).set(params);
+            // paramsBuffer.unmap();
+            device.queue.writeBuffer(paramsBuffer, 0, params);
 
 
-        // 创建着色器模块
-        const shaderModule = device.createShaderModule({
-            code: ` @group(0) @binding(0) var<storage, read> scoreCache: array<i32>;
+
+            const groupMaxScoreBuffer = device.createBuffer({
+                size: outputSize,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+            });
+            //这里是否可以用2字节
+            const groupMaxScoreChefIndexBuffer = device.createBuffer({
+                size: outputSize,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+            });
+
+
+            // 创建着色器模块
+            const shaderModule = device.createShaderModule({
+                code: ` @group(0) @binding(0) var<storage, read> scoreCache: array<i32>;
                 @group(0) @binding(1) var<storage, read> chefEquipCount: array<i32>;
                 @group(0) @binding(2) var<storage, read_write> groupMaxScore: array<i32>;
                 @group(0) @binding(3) var<storage, read_write> groupMaxScoreChefIndex: array<i32>;
@@ -564,113 +560,117 @@ fn calJ(i: i32, j: i32, N: i32) -> i32 {
                 }
 
 `
-        });
+            });
 
-        // 创建计算管线
-        const computePipeline = device.createComputePipeline({
-            layout: "auto",
-            compute: {
-                module: shaderModule,
-                entryPoint: "main"
-            }
-        });
+            // 创建计算管线
+            const computePipeline = device.createComputePipeline({
+                layout: "auto",
+                compute: {
+                    module: shaderModule,
+                    entryPoint: "main"
+                }
+            });
 
-        // 创建绑定组
-        const bindGroup = device.createBindGroup({
-            layout: computePipeline.getBindGroupLayout(0),
-            entries: [
-                {binding: 0, resource: {buffer: scoreCacheBuffer}},
-                {binding: 1, resource: {buffer: chefEquipCountBuffer}},
-                {binding: 2, resource: {buffer: groupMaxScoreBuffer}},
-                {binding: 3, resource: {buffer: groupMaxScoreChefIndexBuffer}}
+            // 创建绑定组
+            const bindGroup = device.createBindGroup({
+                layout: computePipeline.getBindGroupLayout(0),
+                entries: [
+                    {binding: 0, resource: {buffer: scoreCacheBuffer}},
+                    {binding: 1, resource: {buffer: chefEquipCountBuffer}},
+                    {binding: 2, resource: {buffer: groupMaxScoreBuffer}},
+                    {binding: 3, resource: {buffer: groupMaxScoreChefIndexBuffer}}
 
-            ]
-        });
+                ]
+            });
 
-        // 计算 dispatch 大小
+            // 计算 dispatch 大小
 
-        // Calculate total threads based on shader logic
-        const totalThreads = recipeCount ** 3;
-        const workgroupSize = 256;
-        const totalWorkgroups = Math.ceil(totalThreads / workgroupSize);
-        const maxWorkgroupsPerDimension = 65535;
+            // Calculate total threads based on shader logic
+            const totalThreads = recipeCount ** 3;
+            const workgroupSize = 256;
+            const totalWorkgroups = Math.ceil(totalThreads / workgroupSize);
+            const maxWorkgroupsPerDimension = 65535;
 
 // Distribute workgroups across x and y dimensions
-        let dispatchX = Math.min(totalWorkgroups, maxWorkgroupsPerDimension);
-        let dispatchY = Math.ceil(totalWorkgroups / dispatchX);
+            let dispatchX = Math.min(totalWorkgroups, maxWorkgroupsPerDimension);
+            let dispatchY = Math.ceil(totalWorkgroups / dispatchX);
 
 
 
-        // 提交计算任务
-        const commandEncoder = device.createCommandEncoder();
-        const passEncoder = commandEncoder.beginComputePass();
-        passEncoder.setPipeline(computePipeline);
-        passEncoder.setBindGroup(0, bindGroup);
-        passEncoder.dispatchWorkgroups(dispatchX, dispatchY);
-        passEncoder.end();
+            // 提交计算任务
+            const commandEncoder = device.createCommandEncoder();
+            const passEncoder = commandEncoder.beginComputePass();
+            passEncoder.setPipeline(computePipeline);
+            passEncoder.setBindGroup(0, bindGroup);
+            passEncoder.dispatchWorkgroups(dispatchX, dispatchY);
+            passEncoder.end();
 
-        // 读取结果
-        const resultBuffer1 = device.createBuffer({
-            size: outputSize,
-            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-        });
-        const resultBuffer2 = device.createBuffer({
-            size: outputSize,
-            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-        });
+            // 读取结果
+            const resultBuffer1 = device.createBuffer({
+                size: outputSize,
+                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+            });
+            const resultBuffer2 = device.createBuffer({
+                size: outputSize,
+                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+            });
 
-        commandEncoder.copyBufferToBuffer(groupMaxScoreBuffer, 0, resultBuffer1, 0, outputSize);
-        commandEncoder.copyBufferToBuffer(groupMaxScoreChefIndexBuffer, 0, resultBuffer2, 0, outputSize);
-        // commandEncoder.copyBufferToBuffer(testData, 0, resultBuffer3, 0, outputSize);
-        device.queue.submit([commandEncoder.finish()]);
+            commandEncoder.copyBufferToBuffer(groupMaxScoreBuffer, 0, resultBuffer1, 0, outputSize);
+            commandEncoder.copyBufferToBuffer(groupMaxScoreChefIndexBuffer, 0, resultBuffer2, 0, outputSize);
+            // commandEncoder.copyBufferToBuffer(testData, 0, resultBuffer3, 0, outputSize);
+            device.queue.submit([commandEncoder.finish()]);
 
-        await resultBuffer1.mapAsync(GPUMapMode.READ);
-        await resultBuffer2.mapAsync(GPUMapMode.READ);
-        //  await resultBuffer3.mapAsync(GPUMapMode.READ);
-        const groupMaxScore = new Int32Array(resultBuffer1.getMappedRange().slice());
-        const groupMaxScoreChefIndex = new Int32Array(resultBuffer2.getMappedRange().slice());
-        //const testDataResult = new Int32Array(resultBuffer3.getMappedRange().slice());
-        resultBuffer1.unmap();
-        resultBuffer2.unmap();
+            await resultBuffer1.mapAsync(GPUMapMode.READ);
+            await resultBuffer2.mapAsync(GPUMapMode.READ);
+            //  await resultBuffer3.mapAsync(GPUMapMode.READ);
+            const groupMaxScore = new Int32Array(resultBuffer1.getMappedRange().slice());
+            const groupMaxScoreChefIndex = new Int32Array(resultBuffer2.getMappedRange().slice());
+            //const testDataResult = new Int32Array(resultBuffer3.getMappedRange().slice());
+            resultBuffer1.unmap();
+            resultBuffer2.unmap();
 
 
-        //TODO 释放内存
-        resultBuffer1.destroy();
-        resultBuffer2.destroy();
-        groupMaxScoreBuffer.destroy();
-        groupMaxScoreChefIndexBuffer.destroy();
-        paramsBuffer.destroy();
-        chefEquipCountBuffer.destroy();
-        scoreCacheBuffer.destroy();
+            //TODO 释放内存
+            resultBuffer1.destroy();
+            resultBuffer2.destroy();
+            groupMaxScoreBuffer.destroy();
+            groupMaxScoreChefIndexBuffer.destroy();
+            paramsBuffer.destroy();
+            chefEquipCountBuffer.destroy();
+            scoreCacheBuffer.destroy();
 
-        return {groupMaxScore, groupMaxScoreChefIndex};
-    }finally {
-        device.destroy();
+            return {groupMaxScore, groupMaxScoreChefIndex};
+        }finally {
+            device.destroy();
+        }
+
+
     }
 
+     getIndex(i, j,k, recipeCount) {
+        let c1 = this.calI(i, recipeCount - 2); // calI后边改成查表
+        let c2 = this.calJ(i, j - 1, recipeCount); //这里计算
+        let c3 = k - j - 1;
+        return c1+c2+c3;
+    }
 
+     calI(i, N) {
+        // Using regular numbers (JavaScript doesn't have a strict int type)
+        // Division by integers like 6 and 2 will still work as expected
+        const term1 = i * (i - 1) * (i - 3 * N - 2) / 6;
+        const term2 = i * N * (N + 1) / 2;
+        return term1 + term2;
+    }
+
+     calJ(i, j, N) {
+        const count = j - i;
+        const start = N - i - 2;
+        const end = start - count + 1;
+        return (start + end) * count / 2;
+    }
 }
 
-function getIndex(i, j,k, recipeCount) {
-    let c1 = calI(i, recipeCount - 2); // calI后边改成查表
-    let c2 = calJ(i, j - 1, recipeCount); //这里计算
-    let c3 = k - j - 1;
-    return c1+c2+c3;
-}
 
-function calI(i, N) {
-    // Using regular numbers (JavaScript doesn't have a strict int type)
-    // Division by integers like 6 and 2 will still work as expected
-    const term1 = i * (i - 1) * (i - 3 * N - 2) / 6;
-    const term2 = i * N * (N + 1) / 2;
-    return term1 + term2;
-}
 
-function calJ(i, j, N) {
-    const count = j - i;
-    const start = N - i - 2;
-    const end = start - count + 1;
-    return (start + end) * count / 2;
-}
 
 let chefAndRecipeThread = new ChefAndRecipeThread();
