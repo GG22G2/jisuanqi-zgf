@@ -76,7 +76,7 @@
 
           <el-row>
             <el-col :xs="24" :sm="8" :md="8" :lg="8">
-              <el-progress v-show="showPercentage" :percentage="percentage" :color="'#67c23a'"></el-progress>
+<!--              <el-progress v-show="showPercentage" :percentage="percentage" :color="'#67c23a'"></el-progress>-->
             </el-col>
           </el-row>
           <el-row>
@@ -180,7 +180,7 @@ export default {
     return {
       //http://localhost:5173/jisuanqi-zgf?useAll=true
       //如果存在useAll参数，并且为true则CalConfig中useAll为true
-      calConfig: new CalConfig([0, 10, 10, 8, 8, 8, 8, 8, 10, 30], 100, 5, 0.95, false, false),
+      calConfig: new CalConfig([1, 7, 7, 6, 5, 5, 5, 5, 5, 5], 100, 5, 0.95, false, true),
       percentage: 0,
       showPercentage: false,
       dataCode: '',

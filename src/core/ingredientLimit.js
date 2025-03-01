@@ -1,19 +1,23 @@
 
+
+export function getMaterialCount(materials){
+    let materialCount= new Int32Array(47);
+    if (typeof materials === 'number') {
+        materialCount.fill(materials);
+    } else {
+        if (materials.length >= 47) {
+            materialCount = materials;
+        } else {
+            materialCount.fill(50);
+        }
+    }
+    return materialCount;
+}
+
+
 export class IngredientLimit {
     constructor(ingredientNum) {
-        if (typeof ingredientNum === 'number') {
-            this.materialCount = new Int32Array(47)
-            this.extraLimit = [0, 0, 0, 0, 0, 0];
-            this.materialCount.fill(ingredientNum);
-        } else {
-            this.materialCount = new Int32Array(47)
-            this.extraLimit = [0, 0, 0, 0, 0, 0];
-            if (ingredientNum.length >= 47) {
-                this.materialCount = ingredientNum;
-            } else {
-                this.materialCount.fill(50);
-            }
-        }
+
     }
 
     cookingQuantity(recipe, count) {
@@ -26,10 +30,9 @@ export class IngredientLimit {
         for (let i = 0; i < length; i++) {
             const material = materials[i];
             t = materialCount[material.material] / material.quantity;
-            t = t | 0;
             max = Math.min(t, max);
         }
-        return max;
+        return max| 0;
     }
 
     static cookingQuantityAndReduce(materials, count, materialCount) {

@@ -1,5 +1,28 @@
 import {cloneObject} from "./utils.js";
 
+
+class BitArray {
+    constructor(length) {
+        this.buffer = new Uint8Array(Math.ceil(length / 8));
+    }
+
+    get(index) {
+        const byteIndex = Math.floor(index / 8);
+        const bitIndex = index % 8;
+        return (this.buffer[byteIndex] & (1 << bitIndex)) !== 0;
+    }
+
+    set(index, value) {
+        const byteIndex = Math.floor(index / 8);
+        const bitIndex = index % 8;
+        if (value) {
+            this.buffer[byteIndex] |= (1 << bitIndex); // 置1
+        } else {
+            this.buffer[byteIndex] &= ~(1 << bitIndex); // 置0
+        }
+    }
+}
+
 export class PlayChef {
     constructor(chef) {
         this.id = 0;
