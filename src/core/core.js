@@ -568,6 +568,20 @@ class GodInference {
             return;
         }
 
+        /*
+        * 某一层的候选菜谱是否还可以在后续层中被选择？
+        *
+        * 比如第一层的limit是7， 那么经过calQuantityAndPriceFromLastResult后就可以确定必然会被选的7个菜谱，记作候选菜谱
+        *
+        * 当进入下一层时，上一层的候选菜谱，是否还可以参与计算？
+        *
+        * 比如第一层的候选 a,b,c,d
+        * 第一层选择了b,第二层是否可以选择a,b,d。  先a后b和 先b后a的差别就是可能做的菜谱分量不一样。
+        *
+        *
+        *
+        * */
+
         const removes = [];
         for (let i = 0; i < limit; i++) {
             //根据份数计算得分，并降序排列返回
@@ -582,7 +596,7 @@ class GodInference {
                 continue;
             }
 
-            // removes.push(pIndex);
+
             const newPlayRecipes = new Array(9);
 
             for (let j = 0; j < index - 1; j++) {
@@ -596,7 +610,12 @@ class GodInference {
             let nextMaterialCount = this.cookingQuantityAndReduce(selectRecipe.materials2, quantity, materialCount);
 
             this.recipePermutation(index + 1, newPlayRecipes, nextMaterialCount, ignoreRecipeId, selectRecipe.materialFeature, recipeCounts, priceAscResult);
+
+
+
+
             ignoreRecipeId[pIndex] = 0;
+
         }
 
         // for (let remove of removes) {
@@ -743,9 +762,9 @@ class GodInference {
             // if (['兰飞鸿','执笔人','李清凝','艾琳','今珏','普洛妮','玄离','特图图'].indexOf(chef.name)!==-1){
             //     return false;
             // }
-            if (['雷恩'].indexOf(chef.name)!==-1){
-                return false;
-            }
+            // if (['雷恩'].indexOf(chef.name)!==-1){
+            //     return false;
+            // }
             return this.mustChefs.indexOf(chef.name) !== -1 || chef.rarity >= this.chefMinRarity;
         }).sort((chef, chef2) => {
             return chef.chefId - chef2.chefId;

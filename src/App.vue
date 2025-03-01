@@ -179,7 +179,7 @@ export default {
     let useAll = urlParams.get('useAll') === 'true';
     let calConfig = null;
     if (useAll) {
-      calConfig = new CalConfig([1, 7, 7, 7, 7, 6, 6, 5, 4, 4], 200, 5, 0.90, false, useAll)
+      calConfig = new CalConfig([1, 7, 7, 7, 7, 6, 6, 5, 4, 5], 200, 5, 0.90, false, useAll)
     } else {
       calConfig = new CalConfig([1, 7, 6, 5, 4, 4, 4, 3, 3, 3], 120, 5, 0.95, false, useAll)
     }
