@@ -188,6 +188,7 @@ class GodInference {
                         }
 
                         if (startIndex >= total && resultCount === sendCount) {
+                            console.log(maxScoreResult)
                             topPlayChefs = that.parseLong(playRecipesArr, maxScoreResult);
                             end = Date.now();
                             console.info("总用时 " + (end - start) + "ms");
@@ -472,12 +473,7 @@ class GodInference {
         recipes[8] = precipes[8];
 
         const chefs = maxScoreResult.maxScoreChefGroup;
-
-        const topResult = new TopResult(chefs, recipes, score);
-
-        /* add */
-
-        return topResult;
+        return new TopResult(chefs, recipes, score,maxScoreResult.scores);
     }
 
     /**
@@ -486,6 +482,8 @@ class GodInference {
      */
     calSecondStage(topPlayChef) {
         // debugger
+        let scoreCache = this.tempCalCache.scoreCache
+        let recipeCount  =this.tempCalCache.recipeCount
         let chefIds = topPlayChef.chefs;
         let recipeIds = topPlayChef.recipeids;
         let result = []
@@ -496,31 +494,38 @@ class GodInference {
             if (ownChef == null) {
                 ownChef = this.playPresenceChefs[chefIds[i] - this.playChefs.length];
             }
-
-
             let name1 = this.playRecipes[recipeIds[(i * 3)]].name;
             let count1 = this.playRecipes[recipeIds[(i * 3)]].count;
             let name2 = this.playRecipes[recipeIds[(i * 3) + 1]].name;
             let count2 = this.playRecipes[recipeIds[(i * 3) + 1]].count;
             let name3 = this.playRecipes[recipeIds[(i * 3) + 2]].name;
             let count3 = this.playRecipes[recipeIds[(i * 3) + 2]].count;
+
+            let t1 = chefIds[i] * recipeCount;
+            let t2 = chefIds[i] * recipeCount;
+            let t3 = chefIds[i] * recipeCount;
+            //scoreCache[chefIds[i] * recipeCount + i] === 0 || scoreCache[t * recipeCount + j] === 0 || scoreCache[t * recipeCount + k]
+
+            let s1 = scoreCache[chefIds[i] * recipeCount + recipeIds[(i * 3)]]
+            let s2 = scoreCache[chefIds[i] * recipeCount + recipeIds[(i * 3)+1]]
+            let s3 = scoreCache[chefIds[i] * recipeCount + recipeIds[(i * 3)+2]]
+
+
             chefs.push({
                 chef: ownChef.name,
                 equip: ownChef.remark ? ownChef.remark : '',
                 recipes: [
-                    {recipe: name1, count: count1}
-                    , {recipe: name2, count: count2}
-                    , {recipe: name3, count: count3}
+                    {recipe: name1, count: count1,singlePrice:s1 / count1,totalPrice:s1}
+                    , {recipe: name2, count: count2,singlePrice:s2 / count2,totalPrice:s2}
+                    , {recipe: name3, count: count3,singlePrice:s3 / count3,totalPrice:s3}
                 ]
             })
-
         }
-
         result = {
             chefs,
-            score: topPlayChef.score
+            score: topPlayChef.totalScore
         }
-
+        console.log(result)
         return [result]
     }
 
@@ -735,9 +740,9 @@ class GodInference {
         let ownChefs = this.myGameData.chefs.filter((chef) => {
 
             //排除厨师
-            // if (['二郎神','刘昴星','兰飞鸿','忌璃'].indexOf(chef.name)!==-1){
-            //     return false;
-            // }
+            if (['兰飞鸿','执笔人','李清凝','艾琳','今珏','普洛妮','玄离','特图图'].indexOf(chef.name)!==-1){
+                return false;
+            }
 
             return this.mustChefs.indexOf(chef.name) !== -1 || chef.rarity >= this.chefMinRarity;
         }).sort((chef, chef2) => {
@@ -997,6 +1002,9 @@ class TempCalCacheBuilder {
             for (let t = 0; t < playRecipes.length; t++) {
                 const playRecipe = playRecipes[t];
                 const index = playRecipe.index;
+                // if (ownChef.name==='刘昴星'&&playRecipe.name==='金汤海鲜宴'){
+                //     debugger
+                // }
                 const singlePrice = this.kitchenGodCal.calSinglePrice(ownChef, playRecipe);
                 scoreCache[i * recipeCount + index] = singlePrice * playRecipe.count;
             }

@@ -91,9 +91,9 @@
                   <div>{{ topChef.recipes[2].recipe }}</div>
                 </div>
                 <div>
-                  <div>{{ topChef.recipes[0].count }}</div>
-                  <div>{{ topChef.recipes[1].count }}</div>
-                  <div>{{ topChef.recipes[2].count }}</div>
+                  <div>{{ topChef.recipes[0].count }} {{ topChef.recipes[0].singlePrice }} </div>
+                  <div>{{ topChef.recipes[1].count }} {{ topChef.recipes[1].singlePrice }} </div>
+                  <div>{{ topChef.recipes[2].count }} {{ topChef.recipes[2].singlePrice }} </div>
                 </div>
               </div>
 
@@ -180,7 +180,8 @@ export default {
     return {
       //http://localhost:5173/jisuanqi-zgf?useAll=true
       //如果存在useAll参数，并且为true则CalConfig中useAll为true
-      calConfig: new CalConfig([1, 7, 7, 6, 5, 5, 5, 5, 5, 5], 100, 5, 0.95, false, true),
+      //calConfig: new CalConfig([1, 7, 7, 6, 5, 5, 5, 5, 5, 5], 100, 5, 0.95, false, false),
+      calConfig: new CalConfig([1, 5, 5, 5, 4, 4, 4, 3, 3, 3], 100, 5, 0.95, false, false),
       percentage: 0,
       showPercentage: false,
       dataCode: '',

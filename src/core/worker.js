@@ -244,6 +244,7 @@ class ChefAndRecipeThread {
                                 result.maxScore = maxScore;
                                 result.maxScoreChefGroup = [chef1, chef2, chef3];
                                 result.recipes = playRecipes.slice(t, t + 9);
+                                result.scores = [this.groupMaxScore[score1Index + c1],this.groupMaxScore[score2Index + c2],this.groupMaxScore[score3Index + c3]];
                             }
                         }
                     }

@@ -686,19 +686,14 @@ export class TempAddition {
 }
 
 export class TopResult {
-    constructor(playChefs, recipeIndex, score) {
-        this.chefs = null;
-        this.recipeids = null;
-        this.id = 0;
-        this.score = 0;
-        this.update(playChefs, recipeIndex, score);
-    }
-
-    update(playChefs, recipeIndex, score) {
+    constructor(playChefs, recipeIndex, totalScore,scores) {
         this.chefs = playChefs;
         this.recipeids = recipeIndex;
-        this.score = score;
+        this.totalScore = totalScore;
+        this.scores = scores;
     }
+
+
 }
 
 

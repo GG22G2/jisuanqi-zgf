@@ -251,9 +251,9 @@ export class Calculator {
         let basePriceAdd = this.basePriceAdd(skillEffect, ownRecipe) + baseRarity[ownRecipe.rarity];
 
 
-
-
-        price = price * (1 + basePriceAdd);
+        if (basePriceAdd!==0){
+            price = (price * (1 + basePriceAdd)) | 0;
+        }
 
         return Math.ceil(price * (this.base + this.recipeReward[ownRecipe.recipeId] + sexAdd + qualityAddQ + qualityAddS + this.useAll[ownRecipe.rarity] + rarity[ownRecipe.rarity])) | 0;
     }
