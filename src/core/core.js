@@ -16,7 +16,9 @@ import {GlobalAddition} from './globalAddition.js'
 import {Calculator} from './calculator.js'
 import {getMaterialCount, IngredientLimit} from "./ingredientLimit.js";
 import {cloneObject} from "./utils.js";
-
+import FlatQueue from 'flatqueue';
+import {MinQueue} from "heapify";
+import {id} from "element-plus/es/locale/index";
 
 class GodInference {
     constructor(officialGameData, myGameData, recipeReward, sexReward, materials, calConfig) {
@@ -301,7 +303,9 @@ class GodInference {
         this.calQuantity2(recipeCounts, materialCounts);
         let priceAscResult = this.sortOfPrice(recipeCounts, this.tempOwnRecipes, ignoreRecipeId);
 
+        console.time("菜谱组合用时");
         this.recipePermutation(1, [], materialCounts, ignoreRecipeId, 0n, recipeCounts, priceAscResult);
+        console.timeEnd("菜谱组合用时");
         console.log("实际组合数", this.playRecipeGroup.length)
         let maxScore = 0;
         for (let i = this.playRecipeGroup.length - 1; i >= 0; i--) {
@@ -557,16 +561,17 @@ class GodInference {
         //拷贝食材数量
 
         let recipeCounts = new Int32Array(this.tempOwnRecipes.length)
-        let priceAscResult = new BigUint64Array(this.tempOwnRecipes.length)
+        let priceResult = new BigUint64Array(this.tempOwnRecipes.length)
+
 
         //计算奖励倍数加持下,根据剩余食材计算各个菜最多做多少份
-        this.calQuantityAndPriceFromLastResult(this.tempOwnRecipes, recipeCounts, priceAscResult, lastMaterialBit
-            , materialCount, lastRecipeCount, ignoreRecipeId, lastPrice);
+        let   priceAscResult =   this.calQuantityAndPriceFromLastResult(this.tempOwnRecipes, recipeCounts, priceResult, lastMaterialBit
+            , materialCount, lastRecipeCount,lastPrice, ignoreRecipeId);
 
-        let firstScore = priceAscResult[priceAscResult.length - 1];
-        if (firstScore === 0n) {
-            return;
-        }
+        // let firstScore = priceAscResult[priceAscResult.length - 1];
+        // if (firstScore === 0n) {
+        //     return;
+        // }
 
         /*
         * 某一层的候选菜谱是否还可以在后续层中被选择？
@@ -586,16 +591,18 @@ class GodInference {
         for (let i = 0; i < limit; i++) {
             //根据份数计算得分，并降序排列返回
 
-            let priceIdAndScore = priceAscResult[priceAscResult.length - i - 1];
-            let pIndex = Number(priceIdAndScore & 0xFFFFFFFFn);
+           let priceIdAndScore = priceAscResult[priceAscResult.length - i - 1];
+           let pIndex = Number(priceIdAndScore & 0xFFFFFFFFn);
+
+            //let pIndex  = q.pop();
             //let score  = Number((priceIdAndScore>>32n) & 0xFFFFFFFFn);
-            ignoreRecipeId[pIndex] = 1;
+
 
             const quantity = recipeCounts[pIndex];
             if (quantity === 0) {
                 continue;
             }
-
+            ignoreRecipeId[pIndex] = 1;
 
             const newPlayRecipes = new Array(9);
 
@@ -609,13 +616,10 @@ class GodInference {
             //修改食材库存
             let nextMaterialCount = this.cookingQuantityAndReduce(selectRecipe.materials2, quantity, materialCount);
 
-            this.recipePermutation(index + 1, newPlayRecipes, nextMaterialCount, ignoreRecipeId, selectRecipe.materialFeature, recipeCounts, priceAscResult);
-
-
-
+            this.recipePermutation(index + 1, newPlayRecipes, nextMaterialCount, ignoreRecipeId
+                , selectRecipe.materialFeature, recipeCounts, null);
 
             ignoreRecipeId[pIndex] = 0;
-
         }
 
         // for (let remove of removes) {
@@ -634,7 +638,11 @@ class GodInference {
      * @param ignoreRecipeId : Int8Array
      * @return
      */
-    calQuantityAndPriceFromLastResult(recipes, recipeCounts, priceAscResult, lastMaterialFeature, materialCount, lastRecipeCount, ignoreRecipeId, lastPrice) {
+    calQuantityAndPriceFromLastResult(recipes, recipeCounts, priceAscResult, lastMaterialFeature, materialCount, lastRecipeCount,lastPrice, ignoreRecipeId) {
+        //lastMaterialFeature 这里不保存lastMaterialFeature，而是计算每个lastMaterialFeature会影响那些菜谱位置，只更新这几个位置，
+        //价格
+       // const q = new FlatQueue();
+
         recipeCounts.set(lastRecipeCount)
         let resultIndex = 0;
         const maxEquipLimit = this.globalAddtion.maxequiplimit;
@@ -649,14 +657,22 @@ class GodInference {
                 count = IngredientLimit.cookingQuantity(ownRecipe.materials2, ownRecipe.limit + maxEquipLimit[ownRecipe.rarity], materialCount);
                 recipeCounts[id] = count;
             }
-
+            if (count===0){
+                continue
+            }
             if (ignoreRecipeId[id] !== 0) {
                 continue
             }
-            let computedPrice = ownRecipe.rewardPrice * count;
-            priceAscResult[resultIndex++] = BigInt(computedPrice | 0) << 32n | BigInt(ownRecipe.pIndex)
+            let computedPrice = BigInt((ownRecipe.rewardPrice * count) | 0);
+            priceAscResult[i] = computedPrice << 32n | BigInt(ownRecipe.pIndex)
+           //q.push(ownRecipe.pIndex, 5000000-computedPrice);
         }
-        priceAscResult.sort()
+
+        let newPrice = new BigUint64Array(priceAscResult.length);
+        newPrice.set(priceAscResult);
+        newPrice.sort()
+        return newPrice;
+        //这里计算完价格后，不拿结果
     }
 
 
@@ -706,7 +722,7 @@ class GodInference {
      * */
     sortOfPrice(quantity, recipes, ignoreRecipeId) {
         let result = new BigUint64Array(recipes.length);
-        let resultIndex = 0;
+
         for (let i = 0; i < recipes.length; i++) {
             let ownRecipe = recipes[i];
             let recipeId = ownRecipe.recipeId;
@@ -715,11 +731,11 @@ class GodInference {
                 continue
             }
             const reward = this.recipeReward[recipeId];
-            let computedPrice = ownRecipe.price * (1 + reward) * quantity[id];
-            if (computedPrice === 0) {
+            let computedPrice = BigInt( (ownRecipe.price * (1 + reward) * quantity[id])|0) ;
+            if (computedPrice === 0n) {
                 continue
             }
-            result[resultIndex++] = BigInt(computedPrice | 0) << 32n | BigInt(ownRecipe.pIndex)
+            result[i] = computedPrice<< 32n | BigInt(ownRecipe.pIndex)
         }
         result.sort()
         return result;
