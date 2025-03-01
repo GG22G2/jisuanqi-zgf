@@ -76,7 +76,7 @@
 
           <el-row>
             <el-col :xs="24" :sm="8" :md="8" :lg="8">
-<!--              <el-progress v-show="showPercentage" :percentage="percentage" :color="'#67c23a'"></el-progress>-->
+              <!--              <el-progress v-show="showPercentage" :percentage="percentage" :color="'#67c23a'"></el-progress>-->
             </el-col>
           </el-row>
           <el-row>
@@ -91,9 +91,9 @@
                   <div>{{ topChef.recipes[2].recipe }}</div>
                 </div>
                 <div>
-                  <div>{{ topChef.recipes[0].count }} {{ topChef.recipes[0].singlePrice }} </div>
-                  <div>{{ topChef.recipes[1].count }} {{ topChef.recipes[1].singlePrice }} </div>
-                  <div>{{ topChef.recipes[2].count }} {{ topChef.recipes[2].singlePrice }} </div>
+                  <div>{{ topChef.recipes[0].count }} {{ topChef.recipes[0].singlePrice }}</div>
+                  <div>{{ topChef.recipes[1].count }} {{ topChef.recipes[1].singlePrice }}</div>
+                  <div>{{ topChef.recipes[2].count }} {{ topChef.recipes[2].singlePrice }}</div>
                 </div>
               </div>
 
@@ -170,18 +170,25 @@ import {ElNotification} from 'element-plus'
 import {CalConfig} from './core/core.js'
 import {parseData, Task} from './core/task.js'
 
-import { markRaw ,toRaw} from 'vue';
+import {markRaw, toRaw} from 'vue';
 
 export default {
   data() {
     // 获取URL参数
     const urlParams = new URLSearchParams(window.location.search);
-    const useAll = urlParams.get('useAll') === 'true';
+    let useAll = urlParams.get('useAll') === 'true';
+    let calConfig = null;
+    if (useAll) {
+      calConfig = new CalConfig([1, 7, 7, 7, 7, 6, 6, 5, 4, 4], 200, 5, 0.90, false, useAll)
+    } else {
+      calConfig = new CalConfig([1, 7, 6, 5, 4, 4, 4, 3, 3, 3], 120, 5, 0.95, false, useAll)
+    }
+
     return {
       //http://localhost:5173/jisuanqi-zgf?useAll=true
       //如果存在useAll参数，并且为true则CalConfig中useAll为true
       //calConfig: new CalConfig([1, 7, 7, 6, 5, 5, 5, 5, 5, 5], 100, 5, 0.95, false, false),
-      calConfig: new CalConfig([1, 7, 7, 7, 7, 6, 6, 5, 4, 4], 100, 5, 0.95, false, true),
+      calConfig: calConfig,
       percentage: 0,
       showPercentage: false,
       dataCode: '',
