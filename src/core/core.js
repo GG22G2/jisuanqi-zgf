@@ -740,10 +740,12 @@ class GodInference {
         let ownChefs = this.myGameData.chefs.filter((chef) => {
 
             //排除厨师
-            if (['兰飞鸿','执笔人','李清凝','艾琳','今珏','普洛妮','玄离','特图图'].indexOf(chef.name)!==-1){
+            // if (['兰飞鸿','执笔人','李清凝','艾琳','今珏','普洛妮','玄离','特图图'].indexOf(chef.name)!==-1){
+            //     return false;
+            // }
+            if (['雷恩'].indexOf(chef.name)!==-1){
                 return false;
             }
-
             return this.mustChefs.indexOf(chef.name) !== -1 || chef.rarity >= this.chefMinRarity;
         }).sort((chef, chef2) => {
             return chef.chefId - chef2.chefId;
@@ -1020,16 +1022,22 @@ class TempCalCacheBuilder {
                 scoreCache[start + i * recipeCount + index] = singlePrice * playRecipe.count;
             }
         }
+       // debugger
+        let startIndex = playChefs.length;
+        let chefMasks = new Uint32Array(startIndex + playPresenceChefs.length).fill(0);
+        let chefMatchMasks = new Uint32Array(startIndex + playPresenceChefs.length).fill(0);
 
-        let startIndex = this.ownChefs.length;
-        let chefMasks = new Uint32Array(startIndex + this.presenceChefs.length).fill(0);
-        let chefMatchMasks = new Uint32Array(startIndex + this.presenceChefs.length).fill(0);
+
+        //this.tempCalCache.chefCount = playChefs.length;
+        //this.tempCalCache.presenceChefCount = playPresenceChefs.length;
 
         //给厨师的mask生成对应所以
-        for (let i = 0; i < this.presenceChefs.length; i++) {
-            chefMasks[startIndex + i] = this.presenceChefs[i].mask;
-            chefMatchMasks[startIndex + i] = this.presenceChefs[i].matchMask;
+        for (let i = 0; i < playPresenceChefs.length; i++) {
+            chefMasks[startIndex + i] = playPresenceChefs[i].mask;
+            chefMatchMasks[startIndex + i] = playPresenceChefs[i].matchMask;
         }
+
+
         this.tempCalCache.chefMasks = chefMasks;
         this.tempCalCache.chefMatchMasks = chefMatchMasks;
         //后续扩展:  生成菜谱特征， 用六个bit代表菜谱用了那些技法  这样做三个菜的时候，三个菜的特征与运算，如果不等于0就代表是三种统计法菜谱

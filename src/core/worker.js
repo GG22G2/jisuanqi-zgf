@@ -221,25 +221,29 @@ class ChefAndRecipeThread {
                             let realChef1 = chefRealIndex[chef1];
                             let realChef2 = chefRealIndex[chef2];
                             let realChef3 = chefRealIndex[chef3];
-
+                            //debugger
                             if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
 
                                 //特征比较
-                                let mm1 = chefMatchMasks[realChef1];
-                                let mm2 = chefMatchMasks[realChef2];
-                                let mm3 = chefMatchMasks[realChef3];
+                                let mm1 = chefMatchMasks[chef1];
+                                let mm2 = chefMatchMasks[chef2];
+                                let mm3 = chefMatchMasks[chef3];
                                 if ((mm1 | mm2 | mm3) !== 0) {
                                     //有特殊要求，需要具体计算
-                                    let m1 = chefMasks[realChef1];
-                                    let m2 = chefMasks[realChef2];
-                                    let m3 = chefMasks[realChef3];
+                                    let m1 = chefMasks[chef1];
+                                    let m2 = chefMasks[chef2];
+                                    let m3 = chefMasks[chef3];
                                     let p1 = mm1 & (m2 | m3)
                                     let p2 = mm2 & (m1 | m3)
                                     let p3 = mm3 & (m1 | m2)
-                                    if (p1 !== mm1 || p2 !== mm2 || p3 !== mm2) {
+                                    if (p1 !== mm1 || p2 !== mm2 || p3 !== mm3) {
                                         continue
                                     }
+                                    // if (score === 2001329){
+                                    //     debugger
+                                    // }
                                 }
+
                                 maxScore = score;
                                 result.maxScore = maxScore;
                                 result.maxScoreChefGroup = [chef1, chef2, chef3];
