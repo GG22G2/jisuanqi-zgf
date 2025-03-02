@@ -15,10 +15,9 @@ import {
 import {GlobalAddition} from './globalAddition.js'
 import {Calculator} from './calculator.js'
 import {getMaterialCount, IngredientLimit} from "./ingredientLimit.js";
-import {cloneObject} from "./utils.js";
-import FlatQueue from 'flatqueue';
-import {MinQueue} from "heapify";
-import {id} from "element-plus/es/locale/index";
+import {cloneObject, MinHeap} from "./utils.js";
+
+
 
 class GodInference {
     constructor(officialGameData, myGameData, recipeReward, sexReward, materials, calConfig) {
@@ -278,7 +277,7 @@ class GodInference {
 
         //预估
         const product = this.deepLimit.reduce((acc, num) => acc * num);
-        console.log("预估组合数", product); // 输出：6125000
+        console.log("预估组合数", product);
 
         this.estimatedPriceAndSort(recipeCounts, this.tempOwnRecipes);
         this.tempOwnRecipes = this.tempOwnRecipes.slice(0, Math.min(this.recipeLimit, this.tempOwnRecipes.length));
@@ -308,11 +307,14 @@ class GodInference {
         console.timeEnd("菜谱组合用时");
         console.log("实际组合数", this.playRecipeGroup.length)
         let maxScore = 0;
-        for (let i = this.playRecipeGroup.length - 1; i >= 0; i--) {
+
+        let totalScoreCache = new Int32Array(this.playRecipeGroup.length);
+
+        for (let i = 0; i < this.playRecipeGroup.length ; i++) {
             let temp = this.playRecipeGroup[i];
             if (temp == null) {
                 this.playRecipeGroup.length = i;
-                continue
+                break
             }
             let score = 0;
             for (let j = 0; j < 9; j++) {
@@ -321,8 +323,8 @@ class GodInference {
                 const reward = this.recipeReward[ownRecipe.recipeId];
                 //这里要考虑厨师做菜到传可以增加100%售价
                 score += ((ownRecipe.price * (1 + reward + 1) * count) | 0);
-
             }
+            totalScoreCache[i] = score;
             if (maxScore < score) {
                 maxScore = score;
             }
@@ -330,38 +332,30 @@ class GodInference {
         let chongfu = new Set();
         const filterScoreRate = this.filterScoreRate;
         let newPlayRecipeGroup = [];
-        for (let i = this.playRecipeGroup.length - 1; i >= 0; i--) {
+        for (let i =  0; i<this.playRecipeGroup.length; i++) {
             let temp = this.playRecipeGroup[i];
             if (temp == null) {
                 continue
             }
-            let score = 0;
-            let key = "";
-
-
+            let score = totalScoreCache[i] ;
+            if (score < (maxScore * filterScoreRate)) {
+                continue;
+            }
             temp.sort((r1, r2) => {
                 return r2.id - r1.id;
             });
-
+            let key = "";
             for (let j = 0; j < 9; j++) {
                 let count = temp[j].count
                 let ownRecipe = temp[j].recipe
-                const reward = this.recipeReward[ownRecipe.recipeId];
-                score += ((ownRecipe.price * (1 + reward + 1) * count) | 0);
                 key = key + "-" + ownRecipe.recipeId + "-" + count
             }
             if (chongfu.has(key)) {
                 continue;
             }
             chongfu.add(key);
-
-            if (score >= (maxScore * filterScoreRate)) {
-                newPlayRecipeGroup.push(this.playRecipeGroup[i]);
-            }
+            newPlayRecipeGroup.push(this.playRecipeGroup[i]);
         }
-
-        //删除重复组合
-
 
         this.playRecipeGroup = newPlayRecipeGroup;
         console.timeEnd('排列菜谱')
@@ -556,22 +550,18 @@ class GodInference {
             return;
         }
 
-        const limit = Math.min(this.deepLimit[index], this.tempOwnRecipes.length);
+        let limit = this.deepLimit[index];
 
         //拷贝食材数量
 
-        let recipeCounts = new Int32Array(this.tempOwnRecipes.length)
-        let priceResult = new BigUint64Array(this.tempOwnRecipes.length)
+        let recipeCounts = new Int32Array(this.tempOwnRecipes.length);
 
+        let topKHeap = new MinHeap(limit);
 
         //计算奖励倍数加持下,根据剩余食材计算各个菜最多做多少份
-        let   priceAscResult =   this.calQuantityAndPriceFromLastResult(this.tempOwnRecipes, recipeCounts, priceResult, lastMaterialBit
+       this.calQuantityAndPriceFromLastResult(this.tempOwnRecipes, recipeCounts, topKHeap, lastMaterialBit
             , materialCount, lastRecipeCount,lastPrice, ignoreRecipeId);
-
-        // let firstScore = priceAscResult[priceAscResult.length - 1];
-        // if (firstScore === 0n) {
-        //     return;
-        // }
+       let  priceTopKResult = topKHeap.getAll();
 
         /*
         * 某一层的候选菜谱是否还可以在后续层中被选择？
@@ -583,15 +573,18 @@ class GodInference {
         * 比如第一层的候选 a,b,c,d
         * 第一层选择了b,第二层是否可以选择a,b,d。  先a后b和 先b后a的差别就是可能做的菜谱分量不一样。
         *
-        *
-        *
         * */
 
-        const removes = [];
-        for (let i = 0; i < limit; i++) {
+
+        //如果一个菜谱能放在前3层，那么他就不应该出现在后几层的计算当中,这个菜谱的最优解应该就是当它在前几个就被选中的时候
+
+
+        const length =Math.min(limit,priceTopKResult.length)
+        let removesRecipeIndex = [];
+        for (let i = 0; i < length; i++) {
             //根据份数计算得分，并降序排列返回
 
-           let priceIdAndScore = priceAscResult[priceAscResult.length - i - 1];
+           let priceIdAndScore = priceTopKResult[length - i - 1];
            let pIndex = Number(priceIdAndScore & 0xFFFFFFFFn);
 
             //let pIndex  = q.pop();
@@ -602,7 +595,7 @@ class GodInference {
             if (quantity === 0) {
                 continue;
             }
-            ignoreRecipeId[pIndex] = 1;
+
 
             const newPlayRecipes = new Array(9);
 
@@ -613,6 +606,10 @@ class GodInference {
             let selectRecipe = this.tempOwnRecipes[pIndex]
             newPlayRecipes[index - 1] = new PlayRecipe(selectRecipe, quantity);
 
+            //设置为忽略
+            ignoreRecipeId[pIndex] = 1;
+            //removesRecipeIndex.push(pIndex)
+
             //修改食材库存
             let nextMaterialCount = this.cookingQuantityAndReduce(selectRecipe.materials2, quantity, materialCount);
 
@@ -622,15 +619,15 @@ class GodInference {
             ignoreRecipeId[pIndex] = 0;
         }
 
-        // for (let remove of removes) {
-        //     ignoreRecipeId[remove] = 0;
-        // }
+        for (let remove of removesRecipeIndex) {
+            ignoreRecipeId[remove] = 0;
+        }
     }
 
     /**
      * @param recipes : Array
      * @param recipeCounts : Int32Array
-     * @param priceAscResult : BigUint64Array
+     * @param priceAscResult : MinHeap
      * @param lastMaterialFeature : BigInt
      * @param materialCount : Int32Array 各种食材的剩余数量,数组下标对应食材的id
      * @param lastRecipeCount : Int32Array
@@ -639,9 +636,6 @@ class GodInference {
      * @return
      */
     calQuantityAndPriceFromLastResult(recipes, recipeCounts, priceAscResult, lastMaterialFeature, materialCount, lastRecipeCount,lastPrice, ignoreRecipeId) {
-        //lastMaterialFeature 这里不保存lastMaterialFeature，而是计算每个lastMaterialFeature会影响那些菜谱位置，只更新这几个位置，
-        //价格
-       // const q = new FlatQueue();
 
         recipeCounts.set(lastRecipeCount)
         let resultIndex = 0;
@@ -664,15 +658,8 @@ class GodInference {
                 continue
             }
             let computedPrice = BigInt((ownRecipe.rewardPrice * count) | 0);
-            priceAscResult[i] = computedPrice << 32n | BigInt(ownRecipe.pIndex)
-           //q.push(ownRecipe.pIndex, 5000000-computedPrice);
+            priceAscResult.insert(computedPrice << 32n | BigInt(ownRecipe.pIndex))
         }
-
-        let newPrice = new BigUint64Array(priceAscResult.length);
-        newPrice.set(priceAscResult);
-        newPrice.sort()
-        return newPrice;
-        //这里计算完价格后，不拿结果
     }
 
 
@@ -975,16 +962,24 @@ class TempCalCacheBuilder {
                 buildChefSkillEffect(this.officialGameData, newPlayChef);
                 let equipScores = new Int32Array(playRecipes.length);
 
+                //只要厨具存在增加分数效果，就可以上
+                let scoreAddOk = false;
                 for (let t = 0; t < playRecipeCount; t++) {
                     const calRecipe = playRecipes[t];
-                    equipScores[t] = this.kitchenGodCal.calSinglePrice(newPlayChef, calRecipe) * calRecipe.count;
+                 //   equipScores[t] = this.kitchenGodCal.calSinglePrice(newPlayChef, calRecipe) * calRecipe.count;
+
+                    if (this.kitchenGodCal.calSinglePrice(newPlayChef, calRecipe) * calRecipe.count>0){
+                        scoreAddOk = true;
+                        break;
+                    }
+
                 }
-                let sum = 0;
-                //一个厨具应该能让三个菜的总分
-                for (let k = 0; k < playRecipeCount; k++) {
-                    sum = sum + (equipScores[k] - rawScores[k]);
-                }
-                if (sum > 0) {
+                // let sum = 0;
+                // //一个厨具应该能让三个菜的总分
+                // for (let k = 0; k < playRecipeCount; k++) {
+                //     sum = sum + (equipScores[k] - rawScores[k]);
+                // }
+                if (scoreAddOk) {
                     equipCount++;
                     newPlayChef.remark = equip.name
                     playEquipChefs.push(newPlayChef)
@@ -1039,9 +1034,7 @@ class TempCalCacheBuilder {
             for (let t = 0; t < playRecipes.length; t++) {
                 const playRecipe = playRecipes[t];
                 const index = playRecipe.index;
-                // if (ownChef.name==='刘昴星'&&playRecipe.name==='金汤海鲜宴'){
-                //     debugger
-                // }
+
                 const singlePrice = this.kitchenGodCal.calSinglePrice(ownChef, playRecipe);
                 scoreCache[i * recipeCount + index] = singlePrice * playRecipe.count;
             }

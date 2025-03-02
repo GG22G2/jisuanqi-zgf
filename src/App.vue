@@ -39,8 +39,8 @@
                 v-model="calConfig.recipeLimit"
                 style="width: 140px"
                 :step="10"
-                :min="30"
-                :max="300"
+                :min="10"
+                :max="200"
             >
             </el-input-number>
           </el-row>
@@ -178,10 +178,12 @@ export default {
     const urlParams = new URLSearchParams(window.location.search);
     let useAll = urlParams.get('useAll') === 'true';
     let calConfig = null;
+
     if (useAll) {
-      calConfig = new CalConfig([1, 7, 7, 7, 7, 6, 6, 5, 4, 5], 200, 5, 0.90, false, useAll)
+      calConfig = new CalConfig([1, 8, 8, 6, 6, 4, 4, 4, 6, 11], 160, 5, 0.92, true, useAll)
     } else {
-      calConfig = new CalConfig([1, 7, 6, 5, 4, 4, 4, 3, 3, 3], 120, 5, 0.95, false, useAll)
+      calConfig = new CalConfig([1, 8, 7, 5, 5, 3, 3, 3, 5, 10], 120, 5, 0.95, false, useAll)
+     // calConfig = new CalConfig([1, 7, 6, 5, 4, 4, 4, 3, 3, 3], 120, 5, 0.95, false, useAll)
     }
 
     return {

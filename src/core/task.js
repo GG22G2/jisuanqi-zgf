@@ -456,6 +456,7 @@ function importChefsAndRecipesFromFoodGame(officialGameData, foodGameData, calCo
                 chef.selfEquipSkillIds = equip.skill
                 chef.remark = equip.name
             }
+            //todo 给遗玉添加到技能里
 
             // if (jsonChef.ambers!= null){
             //     let amberIds = jsonChef.ambers;
