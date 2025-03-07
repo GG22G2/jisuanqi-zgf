@@ -359,6 +359,9 @@ export class SkillEffect {
             case "BasicPriceUseStirfry":
                 this.chefTagMatchSelfPercent(effect, chef, 'basicPriceUseStirfry');
                 break;
+            case "BasicPriceUseFry":
+                this.chefTagMatchSelfPercent(effect, chef, 'basicPriceUseFry');
+                break;
             case 'PerRank':
                 //处理不了 每制作一种神级料理场上厨师炸售价+10%
                 break

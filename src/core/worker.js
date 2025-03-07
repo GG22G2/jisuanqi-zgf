@@ -1,3 +1,35 @@
+
+
+// 保存原始 console 方法
+const originalConsole = {};
+['log', 'info', 'warn', 'error', 'debug'].forEach(method => {
+    originalConsole[method] = console[method];
+});
+function hijackConsole() {
+    // 遍历所有要拦截的方法
+    ['log', 'info', 'warn', 'error', 'debug'].forEach(method => {
+        console[method] = function(...args) {
+            // 1. 修改输出内容（示例：添加前缀）
+            const modifiedArgs = args.map(arg => `[Hijacked] ${arg}`);
+
+            // 2. 执行原始 console 方法（可选）
+            originalConsole[method].apply(console, modifiedArgs);
+
+            // 3. 发送到主线程（可选）
+            self.postMessage({
+                type: 'console',
+                method: method,
+                args: modifiedArgs
+            });
+        };
+    });
+}
+
+// 立即执行劫持
+hijackConsole();
+
+//console.log("线程开始执行")
+
 let inited = false;
 
 self.onmessage = async (e) => {
@@ -42,7 +74,7 @@ class ChefAndRecipeThread {
                           chefRealIndex
                       }) {
         this.playRecipes = playRecipesArr;
-
+        //console.log("执行setBaseData")
         this.recipePL = recipePL
         let  i=3,j = 7,k = 8;
 
@@ -358,7 +390,13 @@ class ChefAndRecipeThread {
     }
 
     async  initWebGPU() {
-        if (!navigator.gpu) throw new Error("WebGPU not supported");
+        console.log("执行initWebGPU")
+        console.log(navigator.gpu)
+        console.log(WorkerNavigator.gpu)
+        if (!navigator.gpu) {
+            console.log("WebGPU not supported")
+            throw new Error("WebGPU not supported");
+        }
         const adapter = await navigator.gpu.requestAdapter();
         const device = await adapter.requestDevice({
             requiredLimits: {
@@ -366,12 +404,14 @@ class ChefAndRecipeThread {
                 maxStorageBufferBindingSize: 2147483644 // 或adapter.limits.maxStorageBufferBindingSize
             }
         });
+        console.log("gpuDevice",device)
         return device;
     }
 
     async  computeWithWebGPU(
         scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount
     ) {
+        //console.log("执行computeWithWebGPU")
         const device = await this.initWebGPU();
         try {
             // 创建输出缓冲区

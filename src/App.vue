@@ -171,6 +171,10 @@ import {CalConfig} from './core/core.js'
 import {parseData, Task} from './core/task.js'
 
 import {markRaw, toRaw} from 'vue';
+import VConsole from 'vconsole';
+
+const vConsole = new VConsole();
+
 
 export default {
   data() {
@@ -182,8 +186,8 @@ export default {
     if (useAll) {
       calConfig = new CalConfig([1, 8, 8, 6, 6, 4, 4, 4, 6, 11], 160, 5, 0.92, true, useAll)
     } else {
-      calConfig = new CalConfig([1, 8, 7, 5, 5, 3, 3, 3, 5, 10], 120, 5, 0.95, false, useAll)
-     // calConfig = new CalConfig([1, 7, 6, 5, 4, 4, 4, 3, 3, 3], 120, 5, 0.95, false, useAll)
+     // calConfig = new CalConfig([1, 8, 7, 5, 5, 3, 3, 3, 5, 10], 120, 5, 0.95, false, useAll)
+      calConfig = new CalConfig([1, 4, 4, 3, 3, 2, 2, 2, 2, 3], 120, 5, 0.98, false, false)
     }
 
     return {
@@ -220,14 +224,16 @@ export default {
   },
   methods: {
     async calculator() {
+      console.log('准备计算')
       this.topChefs.length = 0;
       this.topScore = null;
       let {officialGameData, myGameData} = await this.loadData();
-
+      console.log('加载完数据')
       if (myGameData == null || officialGameData == null) {
         this.errorNotify('无法计算', '缺少数据，需要从官方导入个人数据', 'error');
         return;
       }
+
       this.percentage = 0;
       let ruleStr = null;
       this.showPercentage = true;

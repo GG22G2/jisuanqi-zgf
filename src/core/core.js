@@ -161,6 +161,7 @@ class GodInference {
             for (let i = 0; i < groupNum; i++) {
                 let calWorker;
                 calWorker = new Worker(new URL('./worker.js', import.meta.url))
+                console.log(calWorker)
                 works.push(calWorker)
                 calWorker.onmessage = function (event) {
 
@@ -169,7 +170,10 @@ class GodInference {
                         curP = event.data.p;
                         //console.log(curP)
                         postMessage(curP * 100)
-                    } else {
+                    } else if (event.data.type === 'console') {
+
+                        console.log(event.data.args)
+                    }else {
                         //console.log(event.data)
                         //计算完成，安排下一个任务
                         const topScoreKey = event.data.result.maxScore;
