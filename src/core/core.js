@@ -821,11 +821,6 @@ class GodInference {
         // 艾琳[每制作一种神级料理场上厨师炸售价+10%]
         // 特图图[每制作一种神级料理场上厨师蒸售价+10%]
 
-        //todo 生成副本后，需要增加校验逻辑，在计算出最大分数后，判断是否合理
-        //todo 但是问题是每组菜谱只保存最高分三个厨师， 所以会导致符合规则的组合不参与计算
-
-        // 所以不论这几个厨师的得分多少，必须在结果集中,给这几个厨师单独一套列表
-
 
         this.tempOwnRecipes = this.myGameData.recipes;
         for (let tempOwnRecipe of this.tempOwnRecipes) {
@@ -834,21 +829,7 @@ class GodInference {
         let equips = []
 
 
-        //将每个厨师生成带各个出具的版本
-
         //获取所有3星出局
-
-        let skillHashMap = this.officialGameData.skillHashMap;
-
-        //这里改成按照厨具效果过滤
-        /*
-        * 只要3星厨具，只要各种售价类，减少技法的一律不考虑
-        * 技能的Type是以 Use 开头的都算作跟售价相关
-        *  六种技法 ['Bake','Steam','Boil','Fry','Knife','Stirfry']
-        * 只使用3星厨具， 出局效果必须能做用于厨师，
-        * [基础售价的，6种口味的，6种技法，6种售价加成]
-        * //或者更简单的，厨师带上出局，对前200到菜能起到价钱效果的厨具都可以保留。保留前60名厨具
-        * */
 
         equips = this.officialGameData.equips;
         let equipTemp = []
@@ -862,10 +843,7 @@ class GodInference {
 
         this.ownEquips = equipTemp;
         this.playEquips = equipTemp;
-
-
     }
-
 }
 
 
@@ -1211,6 +1189,7 @@ class CalConfig {
         this.recipeLimit = recipeLimit;//菜谱限制，根据厨神规则排序菜谱，只是用前recipeLimit个菜
         this.chefMinRarity = chefMinRarity;    //上场3个厨师的星级和
         this.filterScoreRate = filterScoreRate;//使用厨具  带实现
+        this.useSimpleEquip = useEquip;//使用新手池的六种三星技法厨具
         this.useEquip = useEquip;//使用厨具  待实现
         this.useAll = useAll;//拥有全厨师全修炼，全菜谱全专精
         this.mustChefs = ['二郎神'] //不收recipeLimit影响，参与计算的厨师

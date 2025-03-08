@@ -6,7 +6,7 @@
 
 
           <!--          厨具有bug,可能导致同一个厨师出现多次,先隐藏了-->
-          <el-row>
+          <el-row v-if="!simpleCal">
             <el-text class="mx-1" size="large">使用厨具(3星)</el-text>
             <el-switch
                 v-model="calConfig.useEquip"
@@ -17,7 +17,7 @@
           </el-row>
 
 
-          <el-row>
+          <el-row >
             <el-text class="mx-1" size="large">候选厨师最低星级</el-text>
             <el-select
                 v-model="calConfig.chefMinRarity"
@@ -33,7 +33,7 @@
             </el-select>
           </el-row>
 
-          <el-row>
+          <el-row v-if="!simpleCal">
             <el-text class="mx-1" size="large">候选菜谱数量(根据奖励倍数排序)</el-text>
             <el-input-number
                 v-model="calConfig.recipeLimit"
@@ -45,13 +45,13 @@
             </el-input-number>
           </el-row>
 
-          <el-row>
+          <el-row v-if="!simpleCal">
             <el-text class="mx-1" size="large">低分过滤比例(无厨师最大9个菜谱为基准)</el-text>
             <el-input-number
                 v-model="calConfig.filterScoreRate"
                 style="width: 140px"
                 :precision="2"
-                :min="0"
+                :min="0.7"
                 :max="0.99"
                 :step="0.01"
                 :step-strictly="false"
@@ -169,31 +169,33 @@ import {ElNotification} from 'element-plus'
 
 import {CalConfig} from './core/core.js'
 import {parseData, Task} from './core/task.js'
-
 import {markRaw, toRaw} from 'vue';
-import VConsole from 'vconsole';
 
-const vConsole = new VConsole();
 
 
 export default {
   data() {
     // 获取URL参数
+    //http://localhost:5173/jisuanqi-zgf?useAll=true
     const urlParams = new URLSearchParams(window.location.search);
     let useAll = urlParams.get('useAll') === 'true';
     let calConfig = null;
 
+    let simpleCal = navigator.gpu == null;
     if (useAll) {
       calConfig = new CalConfig([1, 8, 8, 6, 6, 4, 4, 4, 6, 11], 160, 5, 0.92, true, useAll)
     } else {
-     // calConfig = new CalConfig([1, 8, 7, 5, 5, 3, 3, 3, 5, 10], 120, 5, 0.95, false, useAll)
-      calConfig = new CalConfig([1, 4, 4, 3, 3, 2, 2, 2, 2, 3], 120, 5, 0.98, false, false)
+      //calConfig = new CalConfig([1, 8, 7, 5, 5, 3, 3, 3, 5, 10], 120, 5, 0.95, false, useAll)
+      calConfig = new CalConfig([1, 7, 6, 4, 3, 3, 3, 3, 5, 10], 120, 5, 0.95, false, false)
     }
 
+    if (simpleCal){
+      calConfig = new CalConfig([1, 5, 5, 3, 3, 3, 3, 4, 6, 7], 120, 5, 0.96, false, false)
+    }
+
+
     return {
-      //http://localhost:5173/jisuanqi-zgf?useAll=true
-      //如果存在useAll参数，并且为true则CalConfig中useAll为true
-      //calConfig: new CalConfig([1, 7, 7, 6, 5, 5, 5, 5, 5, 5], 100, 5, 0.95, false, false),
+      simpleCal : simpleCal,
       calConfig: calConfig,
       percentage: 0,
       showPercentage: false,

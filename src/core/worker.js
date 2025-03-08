@@ -1,49 +1,43 @@
+//
+//
+// // 保存原始 console 方法
+// const originalConsole = {};
+// ['log', 'info', 'warn', 'error', 'debug'].forEach(method => {
+//     originalConsole[method] = console[method];
+// });
+// function hijackConsole() {
+//     // 遍历所有要拦截的方法
+//     ['log', 'info', 'warn', 'error', 'debug'].forEach(method => {
+//         console[method] = function(...args) {
+//             // 1. 修改输出内容（示例：添加前缀）
+//             const modifiedArgs = args.map(arg => `[Hijacked] ${arg}`);
+//
+//             // 2. 执行原始 console 方法（可选）
+//             originalConsole[method].apply(console, modifiedArgs);
+//
+//             // 3. 发送到主线程（可选）
+//             self.postMessage({
+//                 type: 'console',
+//                 method: method,
+//                 args: modifiedArgs
+//             });
+//         };
+//     });
+// }
+//
+// // 立即执行劫持
+// hijackConsole();
 
 
-// 保存原始 console 方法
-const originalConsole = {};
-['log', 'info', 'warn', 'error', 'debug'].forEach(method => {
-    originalConsole[method] = console[method];
-});
-function hijackConsole() {
-    // 遍历所有要拦截的方法
-    ['log', 'info', 'warn', 'error', 'debug'].forEach(method => {
-        console[method] = function(...args) {
-            // 1. 修改输出内容（示例：添加前缀）
-            const modifiedArgs = args.map(arg => `[Hijacked] ${arg}`);
 
-            // 2. 执行原始 console 方法（可选）
-            originalConsole[method].apply(console, modifiedArgs);
-
-            // 3. 发送到主线程（可选）
-            self.postMessage({
-                type: 'console',
-                method: method,
-                args: modifiedArgs
-            });
-        };
-    });
-}
-
-// 立即执行劫持
-hijackConsole();
-
-//console.log("线程开始执行")
-
-let inited = false;
 
 self.onmessage = async (e) => {
     let data = e.data;
-
     await chefAndRecipeThread.setBaseData(data.data);
-
-
     let result = chefAndRecipeThread.call(data.start, data.limit);
     console.log(result)
     self.postMessage({type: 'r', result: result});
-
 };
-
 
 class ChefAndRecipeThread {
 
@@ -74,87 +68,20 @@ class ChefAndRecipeThread {
                           chefRealIndex
                       }) {
         this.playRecipes = playRecipesArr;
-        //console.log("执行setBaseData")
         this.recipePL = recipePL
-        let  i=3,j = 7,k = 8;
 
-        /**
-         *
-         *  1 2 3-100   98
-         *  1 3 4-100   97
-         *  1 4 5-100   96
-         *
-         *
-         *  1 96  97-100 5
-         *  1 97  97-100 3
-         *  1 98  97-100 2
-         *  1 99  100-100 1
-         *
-         *  第一个数是1时的，总数为 1+2+3+4+5+ ... 96+97+98
-         *
-         *  2 3 4-100     97
-         *  2 4 5-100     96
-         *  2 98 99-100   2
-         *  2 99 100-100  1
-         *
-         *  第一个数是2时的，总数为 1+2+3+4+5+ ... 96+97
-         *
-         *  1+2+3+4+5+ ... 96+97+98
-         *  1+2+3+4+5+ ... 96+97
-         *  1+2+3+4+5+ ... 96
-         *  1+2+3+4+5+ ... 68
-         *
-         * i=1 fun =  (1+2+3+4+5+ ... 96+97+98)
-         * i=2 fun =  (1+2+3+4+5+ ... 96+97+98 ) + (1+2+3+4+5+ ... 96+97)
-         * i=3 fun =  (1+2+3+4+5+ ... 96+97+98 ) + (1+2+3+4+5+ ... 96+97)+ (1+2+3+4+5+ ... 96)
-         * i=4 fun =  (1+2+3+4+5+ ... 96+97+98 ) + (1+2+3+4+5+ ... 96+97)+ (1+2+3+4+5+ ... 96)+ (1+2+3+4+5+ ... 95)
-         *
-         *
-         *  i = 32,j=45,k=47
-         *
-         *  96 97 98-100   3
-         *  96 98 99-100   2
-         *  96 99 100-100  1
-         *
-         *  第一个数是96时的，总数为 1+2+3
-         *
-         *
-         *  97 98 99-100   2
-         *  98 99 100-100  1
-         *
-         *  第一个数是97时的，总数为 1+2
-         *
-         *  98 99 100-100  1
-         *
-         *  第一个数是98时的，总数为 1
-         *
-         *
-         *
-         *
-         * 51  52  53-100  48
-         *     53  54-100  47
-         *     54  55-100  46
-         *
-         *
-         * 55  56  57-100  44
-         *     57  58-100  43
-         *     58  59-100  42
-         *
-         *
-         *
-         * 定位索引
-         * */
-
-
-
-         // let result3 = this.calAllCache(scoreCache, recipeCount
-         //     , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
-
-        //console.log(result2.groupMaxScoreChefIndex)
+        let result = null;
 
         console.time('计算每三道菜最高得分的厨师')
-        let result2 = await this.computeWithWebGPU(scoreCache, recipeCount
-            , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+        if (!navigator.gpu) {
+             result = this.calAllCache(scoreCache, recipeCount
+                 , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+        }else {
+            // result = this.calAllCache(scoreCache, recipeCount
+            //     , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+             result = await this.computeWithWebGPU(scoreCache, recipeCount
+                , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+        }
         console.timeEnd('计算每三道菜最高得分的厨师')
 
         //验证结果
@@ -174,8 +101,8 @@ class ChefAndRecipeThread {
 
         //  console.log(result2.groupMaxScoreChefIndex)
 
-        this.groupMaxScore = result2.groupMaxScore
-        this.groupMaxScoreChefIndex = result2.groupMaxScoreChefIndex
+        this.groupMaxScore = result.groupMaxScore
+        this.groupMaxScoreChefIndex = result.groupMaxScoreChefIndex
         this.chefRealIndex = chefRealIndex
 
         this.recipeCount = recipeCount;
@@ -296,7 +223,7 @@ class ChefAndRecipeThread {
     }
 
     calAllCache(scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount) {
-        let maxIndex = calI(recipeCount - 2, recipeCount - 2);
+        let maxIndex = this.calI(recipeCount - 2, recipeCount - 2);
         console.log(maxIndex,recipeCount*recipeCount*recipeCount)
         const groupMaxScore = new Int32Array(maxIndex * (3 + ownPresenceChefCount));
         const groupMaxScoreChefIndex = new Int32Array(maxIndex * (3 + ownPresenceChefCount))
