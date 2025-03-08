@@ -16,7 +16,9 @@
             />
           </el-row>
 
+          {{ abc }}
 
+          {{def}}
           <el-row >
             <el-text class="mx-1" size="large">候选厨师最低星级</el-text>
             <el-select
@@ -182,6 +184,8 @@ export default {
     let calConfig = null;
 
     let simpleCal = navigator.gpu == null;
+    console.log(navigator.gpu)
+    console.log(simpleCal)
     if (useAll) {
       calConfig = new CalConfig([1, 8, 8, 6, 6, 4, 4, 4, 6, 11], 160, 5, 0.92, true, useAll)
     } else {
@@ -195,6 +199,8 @@ export default {
 
 
     return {
+      abc: navigator.gpu,
+      def: simpleCal,
       simpleCal : simpleCal,
       calConfig: calConfig,
       percentage: 0,
