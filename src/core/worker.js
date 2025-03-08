@@ -40,14 +40,12 @@ export class ChefAndRecipeThread {
         this.recipePL = recipePL
 
         let result = null;
-
+        let isMobile = navigator.userAgent.match(/(phone|pad|pod|iPhone|iPod|ios|iPad|Android|Mobile|BlackBerry|IEMobile|MQQBrowser|JUC|Fennec|wOSBrowser|BrowserNG|WebOS|Symbian|Windows Phone)/i);
         console.time('计算每三道菜最高得分的厨师')
-        if (!navigator.gpu) {
+        if (isMobile || !navigator.gpu) {
              result = this.calAllCache(scoreCache, recipeCount
                  , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
         }else {
-            // result = this.calAllCache(scoreCache, recipeCount
-            //     , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
              result = await this.computeWithWebGPU(scoreCache, recipeCount
                 , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
         }

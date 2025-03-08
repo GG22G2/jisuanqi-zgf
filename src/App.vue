@@ -179,7 +179,7 @@ export default {
     let calConfig = null;
 
      //没有进度条机制，所以手机端计算检点一点
-     let simpleCal = this.isMobile()
+     let isMobile = this.isMobile()
 
     if (useAll) {
       calConfig = new CalConfig([1, 8, 8, 6, 6, 4, 4, 4, 6, 11], 160, 5, 0.92, true, useAll)
@@ -187,12 +187,12 @@ export default {
       //calConfig = new CalConfig([1, 8, 7, 5, 5, 3, 3, 3, 5, 10], 120, 5, 0.95, false, useAll)
       calConfig = new CalConfig([1, 7, 6, 4, 3, 3, 3, 3, 5, 10], 120, 5, 0.95, false, false)
     }
-    if (simpleCal) {
+    if (isMobile) {
       calConfig = new CalConfig([1, 5, 4, 3, 3, 3, 3, 4, 5, 6], 100, 5, 0.96, false, false)
     }
 
     return {
-      simpleCal: simpleCal,
+      simpleCal: isMobile,
       calConfig: calConfig,
       percentage: 0,
       showPercentage: false,
