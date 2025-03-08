@@ -1,34 +1,3 @@
-//
-//
-// // 保存原始 console 方法
-// const originalConsole = {};
-// ['log', 'info', 'warn', 'error', 'debug'].forEach(method => {
-//     originalConsole[method] = console[method];
-// });
-// function hijackConsole() {
-//     // 遍历所有要拦截的方法
-//     ['log', 'info', 'warn', 'error', 'debug'].forEach(method => {
-//         console[method] = function(...args) {
-//             // 1. 修改输出内容（示例：添加前缀）
-//             const modifiedArgs = args.map(arg => `[Hijacked] ${arg}`);
-//
-//             // 2. 执行原始 console 方法（可选）
-//             originalConsole[method].apply(console, modifiedArgs);
-//
-//             // 3. 发送到主线程（可选）
-//             self.postMessage({
-//                 type: 'console',
-//                 method: method,
-//                 args: modifiedArgs
-//             });
-//         };
-//     });
-// }
-//
-// // 立即执行劫持
-// hijackConsole();
-
-
 
 
 self.onmessage = async (e) => {
@@ -39,7 +8,7 @@ self.onmessage = async (e) => {
     self.postMessage({type: 'r', result: result});
 };
 
-class ChefAndRecipeThread {
+export class ChefAndRecipeThread {
 
     constructor() {
         this.playRecipes = null;
@@ -318,8 +287,7 @@ class ChefAndRecipeThread {
 
     async  initWebGPU() {
         console.log("执行initWebGPU")
-        console.log(navigator.gpu)
-        console.log(WorkerNavigator.gpu)
+
         if (!navigator.gpu) {
             console.log("WebGPU not supported")
             throw new Error("WebGPU not supported");
@@ -645,4 +613,4 @@ fn calJ(i: i32, j: i32, N: i32) -> i32 {
 
 
 
-let chefAndRecipeThread = new ChefAndRecipeThread();
+//let chefAndRecipeThread = new ChefAndRecipeThread();

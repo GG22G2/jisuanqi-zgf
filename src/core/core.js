@@ -1,5 +1,5 @@
 /* Generated from Java with JSweet 3.0.0 - http://www.jsweet.org */
-import {ChefAndRecipeThread} from './calThread.js'
+import {ChefAndRecipeThread as recipepl} from './calThread.js'
 import {
     PlayChef,
     PlayRecipe,
@@ -16,7 +16,7 @@ import {GlobalAddition} from './globalAddition.js'
 import {Calculator} from './calculator.js'
 import {getMaterialCount, IngredientLimit} from "./ingredientLimit.js";
 import {cloneObject, MinHeap} from "./utils.js";
-
+import {ChefAndRecipeThread} from "./worker.js"
 
 
 class GodInference {
@@ -111,7 +111,7 @@ class GodInference {
 
         let curP = 0;
 
-        const recipePL = ChefAndRecipeThread.disordePermuation_$LI$();
+        const recipePL = recipepl.disordePermuation_$LI$();
 
 
         let totalPlayChefCount = this.tempCalCache.playChefs.length + this.tempCalCache.playPresenceChefs.length;
@@ -150,69 +150,20 @@ class GodInference {
             chefRealIndex: chefRealIndex
         }
 
-
-        //不同区段的实际计算量是不同的, 计算一般集中的前半部分
-        let startIndex = 0, limit = Math.min(300000, total);
-        let sendCount = Math.ceil(total / limit);
-        let resultCount = 0;
-
-
-        return new Promise(resolve => {
-            for (let i = 0; i < groupNum; i++) {
-                let calWorker;
-                calWorker = new Worker(new URL('./worker.js', import.meta.url))
-                console.log(calWorker)
-                works.push(calWorker)
-                calWorker.onmessage = function (event) {
-
-                    if (event.data.type === 'p') {
-
-                        curP = event.data.p;
-                        //console.log(curP)
-                        postMessage(curP * 100)
-                    } else if (event.data.type === 'console') {
-
-                        console.log(event.data.args)
-                    }else {
-                        //console.log(event.data)
-                        //计算完成，安排下一个任务
-                        const topScoreKey = event.data.result.maxScore;
-
-
-                        resultCount++;
-                        if (topScoreKey > maxScoreKey) {
-                            maxScoreKey = topScoreKey;
-                            maxScoreResult = event.data.result;
-                        }
-
-                        if (startIndex < total) {
-                            //再安排一组
-                            this.postMessage({start: startIndex, limit: limit})
-                            startIndex = limit;
-                            limit = Math.min(limit + 300, total)
-                        }
-
-                        if (startIndex >= total && resultCount === sendCount) {
-                            console.log(maxScoreResult)
-                            topPlayChefs = that.parseLong(playRecipesArr, maxScoreResult);
-                            end = Date.now();
-                            console.info("总用时 " + (end - start) + "ms");
-                            postMessage(100)
-                            for (let work of works) {
-                                work.terminate();
-                            }
-                            resolve(that.calSecondStage(topPlayChefs));
-
-                            //that.fenxiTest(maxScoreResult)
-                        }
-                    }
-                };
-
-                calWorker.postMessage({data: data, start: startIndex, limit: limit})
-
-                startIndex = limit;
-                limit = Math.min(limit + 300, total)
+        return new Promise(async resolve => {
+            let chefAndRecipeThread = new ChefAndRecipeThread();
+            await chefAndRecipeThread.setBaseData(data);
+            let result = chefAndRecipeThread.call(0, total);
+            //计算完成，安排下一个任务
+            const topScoreKey = result.maxScore;
+            if (topScoreKey > maxScoreKey) {
+                maxScoreKey = topScoreKey;
+                maxScoreResult = result;
             }
+            topPlayChefs = that.parseLong(playRecipesArr, maxScoreResult);
+            end = Date.now();
+            console.info("总用时 " + (end - start) + "ms");
+            resolve(that.calSecondStage(topPlayChefs));
         });
     }
 
@@ -314,7 +265,7 @@ class GodInference {
 
         let totalScoreCache = new Int32Array(this.playRecipeGroup.length);
 
-        for (let i = 0; i < this.playRecipeGroup.length ; i++) {
+        for (let i = 0; i < this.playRecipeGroup.length; i++) {
             let temp = this.playRecipeGroup[i];
             if (temp == null) {
                 this.playRecipeGroup.length = i;
@@ -336,12 +287,12 @@ class GodInference {
         let chongfu = new Set();
         const filterScoreRate = this.filterScoreRate;
         let newPlayRecipeGroup = [];
-        for (let i =  0; i<this.playRecipeGroup.length; i++) {
+        for (let i = 0; i < this.playRecipeGroup.length; i++) {
             let temp = this.playRecipeGroup[i];
             if (temp == null) {
                 continue
             }
-            let score = totalScoreCache[i] ;
+            let score = totalScoreCache[i];
             if (score < (maxScore * filterScoreRate)) {
                 continue;
             }
@@ -475,7 +426,7 @@ class GodInference {
         recipes[8] = precipes[8];
 
         const chefs = maxScoreResult.maxScoreChefGroup;
-        return new TopResult(chefs, recipes, score,maxScoreResult.scores);
+        return new TopResult(chefs, recipes, score, maxScoreResult.scores);
     }
 
     /**
@@ -485,7 +436,7 @@ class GodInference {
     calSecondStage(topPlayChef) {
         // debugger
         let scoreCache = this.tempCalCache.scoreCache
-        let recipeCount  =this.tempCalCache.recipeCount
+        let recipeCount = this.tempCalCache.recipeCount
         let chefIds = topPlayChef.chefs;
         let recipeIds = topPlayChef.recipeids;
         let result = []
@@ -509,17 +460,17 @@ class GodInference {
             //scoreCache[chefIds[i] * recipeCount + i] === 0 || scoreCache[t * recipeCount + j] === 0 || scoreCache[t * recipeCount + k]
 
             let s1 = scoreCache[chefIds[i] * recipeCount + recipeIds[(i * 3)]]
-            let s2 = scoreCache[chefIds[i] * recipeCount + recipeIds[(i * 3)+1]]
-            let s3 = scoreCache[chefIds[i] * recipeCount + recipeIds[(i * 3)+2]]
+            let s2 = scoreCache[chefIds[i] * recipeCount + recipeIds[(i * 3) + 1]]
+            let s3 = scoreCache[chefIds[i] * recipeCount + recipeIds[(i * 3) + 2]]
 
 
             chefs.push({
                 chef: ownChef.name,
                 equip: ownChef.remark ? ownChef.remark : '',
                 recipes: [
-                    {recipe: name1, count: count1,singlePrice:s1 / count1,totalPrice:s1}
-                    , {recipe: name2, count: count2,singlePrice:s2 / count2,totalPrice:s2}
-                    , {recipe: name3, count: count3,singlePrice:s3 / count3,totalPrice:s3}
+                    {recipe: name1, count: count1, singlePrice: s1 / count1, totalPrice: s1}
+                    , {recipe: name2, count: count2, singlePrice: s2 / count2, totalPrice: s2}
+                    , {recipe: name3, count: count3, singlePrice: s3 / count3, totalPrice: s3}
                 ]
             })
         }
@@ -563,9 +514,9 @@ class GodInference {
         let topKHeap = new MinHeap(limit);
 
         //计算奖励倍数加持下,根据剩余食材计算各个菜最多做多少份
-       this.calQuantityAndPriceFromLastResult(this.tempOwnRecipes, recipeCounts, topKHeap, lastMaterialBit
-            , materialCount, lastRecipeCount,lastPrice, ignoreRecipeId);
-       let  priceTopKResult = topKHeap.getAll();
+        this.calQuantityAndPriceFromLastResult(this.tempOwnRecipes, recipeCounts, topKHeap, lastMaterialBit
+            , materialCount, lastRecipeCount, lastPrice, ignoreRecipeId);
+        let priceTopKResult = topKHeap.getAll();
 
         /*
         * 某一层的候选菜谱是否还可以在后续层中被选择？
@@ -583,13 +534,13 @@ class GodInference {
         //如果一个菜谱能放在前3层，那么他就不应该出现在后几层的计算当中,这个菜谱的最优解应该就是当它在前几个就被选中的时候
 
 
-        const length =Math.min(limit,priceTopKResult.length)
+        const length = Math.min(limit, priceTopKResult.length)
         let removesRecipeIndex = [];
         for (let i = 0; i < length; i++) {
             //根据份数计算得分，并降序排列返回
 
-           let priceIdAndScore = priceTopKResult[length - i - 1];
-           let pIndex = Number(priceIdAndScore & 0xFFFFFFFFn);
+            let priceIdAndScore = priceTopKResult[length - i - 1];
+            let pIndex = Number(priceIdAndScore & 0xFFFFFFFFn);
 
             //let pIndex  = q.pop();
             //let score  = Number((priceIdAndScore>>32n) & 0xFFFFFFFFn);
@@ -639,7 +590,7 @@ class GodInference {
      * @param ignoreRecipeId : Int8Array
      * @return
      */
-    calQuantityAndPriceFromLastResult(recipes, recipeCounts, priceAscResult, lastMaterialFeature, materialCount, lastRecipeCount,lastPrice, ignoreRecipeId) {
+    calQuantityAndPriceFromLastResult(recipes, recipeCounts, priceAscResult, lastMaterialFeature, materialCount, lastRecipeCount, lastPrice, ignoreRecipeId) {
 
         recipeCounts.set(lastRecipeCount)
         let resultIndex = 0;
@@ -655,7 +606,7 @@ class GodInference {
                 count = IngredientLimit.cookingQuantity(ownRecipe.materials2, ownRecipe.limit + maxEquipLimit[ownRecipe.rarity], materialCount);
                 recipeCounts[id] = count;
             }
-            if (count===0){
+            if (count === 0) {
                 continue
             }
             if (ignoreRecipeId[id] !== 0) {
@@ -722,11 +673,11 @@ class GodInference {
                 continue
             }
             const reward = this.recipeReward[recipeId];
-            let computedPrice = BigInt( (ownRecipe.price * (1 + reward) * quantity[id])|0) ;
+            let computedPrice = BigInt((ownRecipe.price * (1 + reward) * quantity[id]) | 0);
             if (computedPrice === 0n) {
                 continue
             }
-            result[i] = computedPrice<< 32n | BigInt(ownRecipe.pIndex)
+            result[i] = computedPrice << 32n | BigInt(ownRecipe.pIndex)
         }
         result.sort()
         return result;
@@ -948,9 +899,9 @@ class TempCalCacheBuilder {
                 let scoreAddOk = false;
                 for (let t = 0; t < playRecipeCount; t++) {
                     const calRecipe = playRecipes[t];
-                 //   equipScores[t] = this.kitchenGodCal.calSinglePrice(newPlayChef, calRecipe) * calRecipe.count;
+                    //   equipScores[t] = this.kitchenGodCal.calSinglePrice(newPlayChef, calRecipe) * calRecipe.count;
 
-                    if (this.kitchenGodCal.calSinglePrice(newPlayChef, calRecipe) * calRecipe.count>0){
+                    if (this.kitchenGodCal.calSinglePrice(newPlayChef, calRecipe) * calRecipe.count > 0) {
                         scoreAddOk = true;
                         break;
                     }
@@ -1032,7 +983,7 @@ class TempCalCacheBuilder {
                 scoreCache[start + i * recipeCount + index] = singlePrice * playRecipe.count;
             }
         }
-       // debugger
+        // debugger
         let startIndex = playChefs.length;
         let chefMasks = new Uint32Array(startIndex + playPresenceChefs.length).fill(0);
         let chefMatchMasks = new Uint32Array(startIndex + playPresenceChefs.length).fill(0);
