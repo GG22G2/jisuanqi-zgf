@@ -15,11 +15,7 @@
                 :inactive-value="false"
             />
           </el-row>
-
-          {{ abc }}
-
-          {{def}}
-          <el-row >
+          <el-row>
             <el-text class="mx-1" size="large">候选厨师最低星级</el-text>
             <el-select
                 v-model="calConfig.chefMinRarity"
@@ -174,34 +170,29 @@ import {parseData, Task} from './core/task.js'
 import {markRaw, toRaw} from 'vue';
 
 
-
 export default {
-  data() {
+   data() {
     // 获取URL参数
     //http://localhost:5173/jisuanqi-zgf?useAll=true
     const urlParams = new URLSearchParams(window.location.search);
     let useAll = urlParams.get('useAll') === 'true';
     let calConfig = null;
 
-    let simpleCal = navigator.gpu == null;
-    console.log(navigator.gpu)
-    console.log(simpleCal)
+     //没有进度条机制，所以手机端计算检点一点
+     let simpleCal = this.isMobile()
+
     if (useAll) {
       calConfig = new CalConfig([1, 8, 8, 6, 6, 4, 4, 4, 6, 11], 160, 5, 0.92, true, useAll)
     } else {
       //calConfig = new CalConfig([1, 8, 7, 5, 5, 3, 3, 3, 5, 10], 120, 5, 0.95, false, useAll)
       calConfig = new CalConfig([1, 7, 6, 4, 3, 3, 3, 3, 5, 10], 120, 5, 0.95, false, false)
     }
-
-    if (simpleCal){
-      calConfig = new CalConfig([1, 5, 5, 3, 3, 3, 3, 4, 6, 7], 120, 5, 0.96, false, false)
+    if (simpleCal) {
+      calConfig = new CalConfig([1, 5, 4, 3, 3, 3, 3, 4, 5, 6], 100, 5, 0.96, false, false)
     }
 
-
     return {
-      abc: navigator.gpu,
-      def: simpleCal,
-      simpleCal : simpleCal,
+      simpleCal: simpleCal,
       calConfig: calConfig,
       percentage: 0,
       showPercentage: false,
@@ -231,6 +222,10 @@ export default {
     }
   },
   methods: {
+    isMobile() {
+      let flag = navigator.userAgent.match(/(phone|pad|pod|iPhone|iPod|ios|iPad|Android|Mobile|BlackBerry|IEMobile|MQQBrowser|JUC|Fennec|wOSBrowser|BrowserNG|WebOS|Symbian|Windows Phone)/i);
+      return flag;
+    },
     async calculator() {
       console.log('准备计算')
       this.topChefs.length = 0;
