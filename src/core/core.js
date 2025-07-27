@@ -154,6 +154,11 @@ class GodInference {
             let chefAndRecipeThread = new ChefAndRecipeThread();
             await chefAndRecipeThread.setBaseData(data);
             let result = chefAndRecipeThread.call(0, total);
+
+            //let result = await chefAndRecipeThread.callWithGpu(0, total);
+
+            console.log('callWithGpu',result)
+
             //计算完成，安排下一个任务
             const topScoreKey = result.maxScore;
             if (topScoreKey > maxScoreKey) {

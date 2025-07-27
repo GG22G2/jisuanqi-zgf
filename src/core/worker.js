@@ -189,6 +189,236 @@ export class ChefAndRecipeThread {
         return result;
     }
 
+
+    // 将这个新方法添加到您的 ChefAndRecipeThread 类中
+
+    /**
+     * `call` 方法的 GPU 加速版本（已修复缓冲区大小和对齐问题）。
+     *
+     * @param {number} start 菜谱组合的起始索引。
+     * @param {number} limit 菜谱组合的结束索引。
+     * @returns {Promise<object>} 一个 Promise，它会解析为与原始格式完全相同的结果对象。
+     */
+    //todo 还有bug
+    async callWithGpu(start, limit) {
+        console.log("[GPU] callWithGpu 开始执行，范围:", start, "到", limit);
+        const startTime = Date.now();
+
+        const numCombinations = limit - start;
+        if (numCombinations <= 0) {
+            console.warn("[GPU] 警告: 计算范围为空，直接返回。");
+            return { maxScore: 0, maxScoreChefGroup: new Array(3), recipes: null, scores: null };
+        }
+
+        // --- 步骤 1: CPU 端数据预处理 (已修正) ---
+        // 直接创建 Uint32Array 以匹配 WGSL 中的 u32 类型，并保证4字节对齐
+        const playRecipes = new Uint32Array(numCombinations * 9);
+        const temp = this.playRecipes;
+        const recipePL = this.recipePL;
+        for (let i = 0; i < numCombinations; i++) {
+            const pIndex = start + i;
+            const playRecipeBaseIndex = i * 9;
+            const tempBaseIndex = pIndex * 9;
+            const ints = recipePL[0];
+            for (let j = 0; j < 9; j++) {
+                // 将 Uint16 的菜谱ID 存入 Uint32 数组
+                playRecipes[playRecipeBaseIndex + j] = temp[tempBaseIndex + ints[j]];
+            }
+        }
+        console.log(`[GPU] 数据预处理完成，创建了 ${numCombinations} 组菜谱组合 (Uint32Array)。`);
+
+        // --- 步骤 2: WebGPU 初始化 ---
+        let device;
+        try {
+            device = await this.initWebGPU();
+        } catch (error) {
+            console.error("[GPU] 致命错误: WebGPU设备初始化失败!", error);
+            return this.call(start, limit);
+        }
+
+        if (!device) {
+            console.error("[GPU] 致命错误: WebGPU设备不可用，回退到CPU执行。");
+            return this.call(start, limit);
+        }
+        console.log("[GPU] WebGPU 设备初始化成功。");
+
+        try {
+            const chefT = this.presenceChefCount + 3;
+
+            const maxChefIndex = this.groupMaxScoreChefIndex.reduce((max, val) => Math.max(max, val), 0);
+            console.log(`[GPU] 检查: 厨师最大索引为 ${maxChefIndex}。`);
+            if (maxChefIndex >= 1024) {
+                console.error(`[GPU] 致命逻辑错误: 厨师索引 (${maxChefIndex}) 超出着色器打包限制(1023)！`);
+                return this.call(start, limit);
+            }
+
+            // --- 创建并写入 GPU 缓冲区 (已修正) ---
+            console.log("[GPU] 开始创建和写入GPU缓冲区...");
+            // playRecipes 本身就是 Uint32Array，大小正确且对齐
+            const playRecipesBuffer = device.createBuffer({ size: playRecipes.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+            // 直接写入 playRecipes 的数据
+            device.queue.writeBuffer(playRecipesBuffer, 0, playRecipes);
+
+            // ... 其他缓冲区的创建保持不变 ...
+            const groupMaxScoreBuffer = device.createBuffer({ size: this.groupMaxScore.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+            device.queue.writeBuffer(groupMaxScoreBuffer, 0, this.groupMaxScore);
+
+            const groupMaxScoreChefIndexBuffer = device.createBuffer({ size: this.groupMaxScoreChefIndex.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+            device.queue.writeBuffer(groupMaxScoreChefIndexBuffer, 0, this.groupMaxScoreChefIndex);
+
+            const chefRealIndexBuffer = device.createBuffer({ size: this.chefRealIndex.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+            device.queue.writeBuffer(chefRealIndexBuffer, 0, this.chefRealIndex);
+
+            const chefMasksBuffer = device.createBuffer({ size: this.chefMasks.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+            device.queue.writeBuffer(chefMasksBuffer, 0, this.chefMasks);
+
+            const chefMatchMasksBuffer = device.createBuffer({ size: this.chefMatchMasks.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+            device.queue.writeBuffer(chefMatchMasksBuffer, 0, this.chefMatchMasks);
+
+            const resultStructSizeBytes = 7 * 4;
+            const outputBufferSize = numCombinations * resultStructSizeBytes;
+            const outputBuffer = device.createBuffer({ size: outputBufferSize, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+            console.log(`[GPU] 缓冲区创建完成，输出缓冲区大小: ${outputBufferSize / 1024} KB`);
+
+            // --- WGSL 着色器与管线 (保持不变) ---
+            const shaderCode = `
+            // ... (此处省略与之前相同的WGSL代码) ...
+            fn calI(i: i32, N: i32) -> i32 { let term1 = i * (i - 1) * (i - 3 * N - 2) / 6; let term2 = i * N * (N + 1) / 2; return term1 + term2; }
+            fn calJ(i: i32, j: i32, N: i32) -> i32 { let count = j - i; let start = N - i - 2; let end = start - count + 1; return (start + end) * count / 2; }
+            fn getIndex(i: u32, j: u32, k: u32, recipeCount: u32) -> u32 { let c1 = calI(i32(i), i32(recipeCount) - 2); let c2 = calJ(i32(i), i32(j) - 1, i32(recipeCount)); let c3 = k - j - 1; return u32(c1 + c2 + i32(c3)); }
+            struct WorkgroupResult { maxScore: atomic<i32>, packedChefs: atomic<u32>, score1: atomic<i32>, score2: atomic<i32>, score3: atomic<i32>, };
+            struct FinalResult { score: i32, chef1: i32, chef2: i32, chef3: i32, score1: i32, score2: i32, score3: i32, };
+            @group(0) @binding(0) var<storage, read> playRecipes: array<u32>; @group(0) @binding(1) var<storage, read> groupMaxScore: array<i32>; @group(0) @binding(2) var<storage, read> groupMaxScoreChefIndex: array<i32>; @group(0) @binding(3) var<storage, read> chefRealIndex: array<i32>; @group(0) @binding(4) var<storage, read> chefMasks: array<i32>; @group(0) @binding(5) var<storage, read> chefMatchMasks: array<i32>; @group(0) @binding(6) var<storage, read_write> output: array<FinalResult>;
+            var<workgroup> localBest: WorkgroupResult;
+            @compute @workgroup_size(256)
+            fn main(@builtin(local_invocation_id) local_id: vec3<u32>, @builtin(workgroup_id) workgroup_id: vec3<u32>) {
+                let recipeCount: u32 = ${this.recipeCount}; let chefT: u32 = ${chefT}; let numCombinations: u32 = ${numCombinations}; let workgroupSize: u32 = 256;
+                let combinationIndex = workgroup_id.x; if (combinationIndex >= numCombinations) { return; }
+                if (local_id.x == 0u) { atomicStore(&localBest.maxScore, 0); atomicStore(&localBest.packedChefs, 0u); atomicStore(&localBest.score1, 0); atomicStore(&localBest.score2, 0); atomicStore(&localBest.score3, 0); }
+                workgroupBarrier();
+                let recipeBaseIndex = combinationIndex * 9u;
+                let r1 = playRecipes[recipeBaseIndex + 0u]; let r2 = playRecipes[recipeBaseIndex + 1u]; let r3 = playRecipes[recipeBaseIndex + 2u];
+                let r4 = playRecipes[recipeBaseIndex + 3u]; let r5 = playRecipes[recipeBaseIndex + 4u]; let r6 = playRecipes[recipeBaseIndex + 5u];
+                let r7 = playRecipes[recipeBaseIndex + 6u]; let r8 = playRecipes[recipeBaseIndex + 7u]; let r9 = playRecipes[recipeBaseIndex + 8u];
+                let score1GroupIdx = getIndex(r1, r2, r3, recipeCount) * chefT; let score2GroupIdx = getIndex(r4, r5, r6, recipeCount) * chefT; let score3GroupIdx = getIndex(r7, r8, r9, recipeCount) * chefT;
+                let totalIterations = chefT * chefT * chefT;
+                for (var i = local_id.x; i < totalIterations; i = i + workgroupSize) {
+                    let c1 = i % chefT; let c2 = (i / chefT) % chefT; let c3 = i / (chefT * chefT);
+                    let score1 = groupMaxScore[score1GroupIdx + c1]; let score2 = groupMaxScore[score2GroupIdx + c2]; let score3 = groupMaxScore[score3GroupIdx + c3];
+                    let currentScore = score1 + score2 + score3;
+                    if (currentScore <= atomicLoad(&localBest.maxScore)) { continue; }
+                    let chef1_idx = groupMaxScoreChefIndex[score1GroupIdx + c1]; let chef2_idx = groupMaxScoreChefIndex[score2GroupIdx + c2]; let chef3_idx = groupMaxScoreChefIndex[score3GroupIdx + c3];
+                    let realChef1 = chefRealIndex[chef1_idx]; let realChef2 = chefRealIndex[chef2_idx]; let realChef3 = chefRealIndex[chef3_idx];
+                    if (realChef1 != realChef2 && realChef1 != realChef3 && realChef2 != realChef3) {
+                        let mm1 = chefMatchMasks[chef1_idx]; let mm2 = chefMatchMasks[chef2_idx]; let mm3 = chefMatchMasks[chef3_idx];
+                        if ((mm1 | mm2 | mm3) != 0) {
+                            let m1 = chefMasks[chef1_idx]; let m2 = chefMasks[chef2_idx]; let m3 = chefMasks[chef3_idx];
+                            let p1 = mm1 & (m2 | m3); let p2 = mm2 & (m1 | m3); let p3 = mm3 & (m1 | m2);
+                            if (p1 != mm1 || p2 != mm2 || p3 != mm3) { continue; }
+                        }
+                        let oldMax = atomicMax(&localBest.maxScore, currentScore);
+                        if (currentScore > oldMax) { let packed = u32(chef1_idx) | (u32(chef2_idx) << 10) | (u32(chef3_idx) << 20); atomicStore(&localBest.packedChefs, packed); atomicStore(&localBest.score1, score1); atomicStore(&localBest.score2, score2); atomicStore(&localBest.score3, score3); }
+                    }
+                }
+                workgroupBarrier();
+                if (local_id.x == 0u) {
+                    let finalScore = atomicLoad(&localBest.maxScore);
+                    if (finalScore > 0) {
+                        let packed = atomicLoad(&localBest.packedChefs);
+                        let finalChef1 = i32(packed & 0x3FFu); let finalChef2 = i32((packed >> 10) & 0x3FFu); let finalChef3 = i32((packed >> 20) & 0x3FFu);
+                        output[combinationIndex].score = finalScore; output[combinationIndex].chef1 = finalChef1; output[combinationIndex].chef2 = finalChef2; output[combinationIndex].chef3 = finalChef3;
+                        output[combinationIndex].score1 = atomicLoad(&localBest.score1); output[combinationIndex].score2 = atomicLoad(&localBest.score2); output[combinationIndex].score3 = atomicLoad(&localBest.score3);
+                    }
+                }
+            }`;
+
+            // ... 后续代码保持不变 ...
+            let shaderModule, pipeline;
+            try {
+                console.log("[GPU] 正在编译WGSL着色器...");
+                shaderModule = device.createShaderModule({ code: shaderCode });
+                console.log("[GPU] 着色器编译成功。正在创建计算管线...");
+                pipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module: shaderModule, entryPoint: "main" } });
+                console.log("[GPU] 计算管线创建成功。");
+            } catch (e) {
+                console.error("[GPU] 致命错误: WGSL编译或管线创建失败!", e);
+                throw e;
+            }
+
+            const bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
+                    { binding: 0, resource: { buffer: playRecipesBuffer } }, { binding: 1, resource: { buffer: groupMaxScoreBuffer } },
+                    { binding: 2, resource: { buffer: groupMaxScoreChefIndexBuffer } }, { binding: 3, resource: { buffer: chefRealIndexBuffer } },
+                    { binding: 4, resource: { buffer: chefMasksBuffer } }, { binding: 5, resource: { buffer: chefMatchMasksBuffer } },
+                    { binding: 6, resource: { buffer: outputBuffer } }
+                ]});
+
+            console.log("[GPU] 正在提交计算任务...");
+            const commandEncoder = device.createCommandEncoder();
+            const passEncoder = commandEncoder.beginComputePass();
+            passEncoder.setPipeline(pipeline);
+            passEncoder.setBindGroup(0, bindGroup);
+            passEncoder.dispatchWorkgroups(numCombinations, 1, 1);
+            passEncoder.end();
+
+            const readbackBuffer = device.createBuffer({ size: outputBufferSize, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+            commandEncoder.copyBufferToBuffer(outputBuffer, 0, readbackBuffer, 0, outputBufferSize);
+            device.queue.submit([commandEncoder.finish()]);
+            console.log("[GPU] 计算任务已提交，等待GPU执行完成...");
+
+            await readbackBuffer.mapAsync(GPUMapMode.READ);
+            console.log("[GPU] GPU执行完成，结果已成功映射到CPU内存。");
+
+            const gpuResults = new Int32Array(readbackBuffer.getMappedRange().slice());
+            readbackBuffer.unmap();
+
+            console.log("[GPU] 正在CPU端进行最终结果规约...");
+            let maxScore = 0;
+            let bestCombinationIndex = -1;
+            for (let i = 0; i < numCombinations; i++) {
+                const score = gpuResults[i * 7];
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestCombinationIndex = i;
+                }
+            }
+
+            let finalResult;
+            if (bestCombinationIndex !== -1) {
+                const resultBaseIndex = bestCombinationIndex * 7;
+                finalResult = {
+                    maxScore: gpuResults[resultBaseIndex],
+                    maxScoreChefGroup: [gpuResults[resultBaseIndex + 1], gpuResults[resultBaseIndex + 2], gpuResults[resultBaseIndex + 3]],
+                    // 在返回结果时，需要从 Uint32Array 转回 Uint16Array 或常规数组
+                    recipes: new Uint16Array(playRecipes.slice(bestCombinationIndex * 9, bestCombinationIndex * 9 + 9)),
+                    scores: [gpuResults[resultBaseIndex + 4], gpuResults[resultBaseIndex + 5], gpuResults[resultBaseIndex + 6]]
+                };
+                console.log(`[GPU] 找到最优解！最高分: ${finalResult.maxScore}`);
+            } else {
+                finalResult = { maxScore: 0, maxScoreChefGroup: new Array(3), recipes: null, scores:null };
+                console.warn("[GPU] 警告: GPU计算完成，但未找到任何得分大于0的组合。");
+            }
+
+            console.log("[GPU] 清理GPU资源...");
+            playRecipesBuffer.destroy(); groupMaxScoreBuffer.destroy(); groupMaxScoreChefIndexBuffer.destroy();
+            chefRealIndexBuffer.destroy(); chefMasksBuffer.destroy(); chefMatchMasksBuffer.destroy();
+            outputBuffer.destroy(); readbackBuffer.destroy();
+
+            const endTime = Date.now();
+            console.info(`[GPU] 完整流程结束，总用时: ${endTime - startTime}ms`);
+            return finalResult;
+
+        } catch (e) {
+            console.error("[GPU] 捕获到GPU执行期间的致命错误!", e);
+            console.log("[GPU] 因发生错误，正在回退到CPU版本执行...");
+            return this.call(start, limit);
+        } finally {
+            if (device) {
+                device.destroy();
+                console.log("[GPU] 设备已销毁。");
+            }
+        }
+    }
+
     calAllCache(scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount) {
         let maxIndex = this.calI(recipeCount - 2, recipeCount - 2);
         console.log(maxIndex,recipeCount*recipeCount*recipeCount)
