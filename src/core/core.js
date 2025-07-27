@@ -253,12 +253,12 @@ class GodInference {
         this.playRecipeGroup = new Array(product);
         this.playRecipeGroupIndex = 0;
 
-        recipeCounts = new Int32Array(this.tempOwnRecipes.length)
-        this.calQuantity2(recipeCounts, materialCounts);
-        let priceAscResult = this.sortOfPrice(recipeCounts, this.tempOwnRecipes, ignoreRecipeId);
+        let initialRecipeCounts = new Int32Array(this.tempOwnRecipes.length)
+        this.calQuantity2(initialRecipeCounts, materialCounts);
+        let priceAscResult = this.sortOfPrice(initialRecipeCounts, this.tempOwnRecipes, ignoreRecipeId);
 
         console.time("菜谱组合用时");
-        this.recipePermutation(1, [], materialCounts, ignoreRecipeId, 0n, recipeCounts, priceAscResult);
+        this.recipePermutation(1, [], materialCounts, ignoreRecipeId, 0n, initialRecipeCounts, priceAscResult);
         console.timeEnd("菜谱组合用时");
         console.log("实际组合数", this.playRecipeGroup.length)
         let maxScore = 0;
@@ -499,16 +499,11 @@ class GodInference {
 
         if (index === 10) {
             this.playRecipeGroup[this.playRecipeGroupIndex++] = play;
-            // if (this.playRecipeGroup.length % 500000===0) {
-            //     console.log(this.playRecipeGroup.length)
-            // }
             return;
         }
 
         let limit = this.deepLimit[index];
-
         //拷贝食材数量
-
         let recipeCounts = new Int32Array(this.tempOwnRecipes.length);
 
         let topKHeap = new MinHeap(limit);
@@ -517,22 +512,6 @@ class GodInference {
         this.calQuantityAndPriceFromLastResult(this.tempOwnRecipes, recipeCounts, topKHeap, lastMaterialBit
             , materialCount, lastRecipeCount, lastPrice, ignoreRecipeId);
         let priceTopKResult = topKHeap.getAll();
-
-        /*
-        * 某一层的候选菜谱是否还可以在后续层中被选择？
-        *
-        * 比如第一层的limit是7， 那么经过calQuantityAndPriceFromLastResult后就可以确定必然会被选的7个菜谱，记作候选菜谱
-        *
-        * 当进入下一层时，上一层的候选菜谱，是否还可以参与计算？
-        *
-        * 比如第一层的候选 a,b,c,d
-        * 第一层选择了b,第二层是否可以选择a,b,d。  先a后b和 先b后a的差别就是可能做的菜谱分量不一样。
-        *
-        * */
-
-
-        //如果一个菜谱能放在前3层，那么他就不应该出现在后几层的计算当中,这个菜谱的最优解应该就是当它在前几个就被选中的时候
-
 
         const length = Math.min(limit, priceTopKResult.length)
         let removesRecipeIndex = [];
@@ -565,17 +544,47 @@ class GodInference {
             ignoreRecipeId[pIndex] = 1;
             //removesRecipeIndex.push(pIndex)
 
-            //修改食材库存
-            let nextMaterialCount = this.cookingQuantityAndReduce(selectRecipe.materials2, quantity, materialCount);
+            this._reduceMaterials(selectRecipe.materials2, quantity, materialCount);
 
-            this.recipePermutation(index + 1, newPlayRecipes, nextMaterialCount, ignoreRecipeId
+
+            this.recipePermutation(index + 1, newPlayRecipes, materialCount, ignoreRecipeId
                 , selectRecipe.materialFeature, recipeCounts, null);
 
+            // 3. 递归返回后，原地恢复食材
+            this._restoreMaterials(selectRecipe.materials2, quantity, materialCount);
             ignoreRecipeId[pIndex] = 0;
         }
 
         for (let remove of removesRecipeIndex) {
             ignoreRecipeId[remove] = 0;
+        }
+    }
+
+
+
+
+
+    /**
+     * 原地减少食材数量（用于回溯）
+     * @param {Array} materials - 菜谱所需的食材列表
+     * @param {number} count - 制作份数
+     * @param {Int32Array} materialCount - 当前食材存量数组（将被原地修改）
+     */
+    _reduceMaterials(materials, count, materialCount) {
+        for (const material of materials) {
+            materialCount[material.material] -= material.quantity * count;
+        }
+    }
+
+    /**
+     * 原地恢复食材数量（用于回溯）
+     * @param {Array} materials - 菜谱所需的食材列表
+     * @param {number} count - 制作份数
+     * @param {Int32Array} materialCount - 当前食材存量数组（将被原地修改）
+     */
+    _restoreMaterials(materials, count, materialCount) {
+        for (const material of materials) {
+            materialCount[material.material] += material.quantity * count;
         }
     }
 
