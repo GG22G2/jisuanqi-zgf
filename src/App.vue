@@ -279,7 +279,7 @@ export default {
       if (oldRule) {
         return JSON.parse(oldRule);
       }
-      let ruleStr = await (await fetch(`https://h5.baochaojianghu.com/api/get_rule?time=${ruleTime}`)).json();
+      let ruleStr = await (await fetch(`https://i.baochaojianghu.com/api/get_rule?time=${ruleTime}`)).json();
       localStorage.setItem(ruleTime, JSON.stringify(ruleStr));
       return ruleStr;
     },
@@ -343,7 +343,7 @@ export default {
       let endTime = startTime + 205200000;
       let curWeekRule = null;
       if (curTime >= startTime && curTime <= endTime) {
-        curWeekRule = await (await fetch('https://h5.baochaojianghu.com/api/get_rule')).json();
+        curWeekRule = await (await fetch('https://i.baochaojianghu.com/api/get_rule')).json();
         this.curWeekRule = curWeekRule;
         return true;
       }
