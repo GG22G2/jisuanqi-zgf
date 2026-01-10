@@ -279,7 +279,9 @@ export default {
       if (oldRule) {
         return JSON.parse(oldRule);
       }
-      let ruleStr = await (await fetch(`https://i.baochaojianghu.com/api/get_rule?time=${ruleTime}`)).json();
+      //ruleTime = '2026-01-06T5:00:00.000Z';   //2026-01-02 13:00:00
+      let requestTime = new Date(ruleTime).toISOString();
+      let ruleStr = await (await fetch(`https://i.baochaojianghu.com/api/get_rule?time=${requestTime}`)).json();
       localStorage.setItem(ruleTime, JSON.stringify(ruleStr));
       return ruleStr;
     },
@@ -304,7 +306,7 @@ export default {
       return parseData(gameData, myGameData, this.calConfig);
     },
     async initRuleSelected() {
-      let data = await (await fetch('https://h5.baochaojianghu.com/api/get_etc_rule')).json();
+      let data = await (await fetch('https://i.baochaojianghu.com/api/get_etc_rule')).json();
       //如果是周五下午到周日22点，则尝试获取本周的厨神数据
       let curWeekRuleResult = await this.getCurrentWeekRule();
 
@@ -320,12 +322,12 @@ export default {
       for (let item of data) {
         //24/1/26-酸味  以日期开始 -  的格式
         const match = item.tag.match(regex);
-        if (match != null) {
+       // if (match != null) {
           ruleList.push({
             label: item.tag,
             value: item['start_time']
           })
-        }
+      //  }
 
       }
     },

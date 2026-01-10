@@ -598,8 +598,12 @@ function parseRule(officialGameData, jsonObjectRule) {
 
             //厨师性别影响
             if (rule.ChefTagEffect) {
-                sexReward[0] = rule.ChefTagEffect["1"]
-                sexReward[1] = rule.ChefTagEffect["2"]
+                if (rule.ChefTagEffect["1"]){
+                    sexReward[0] = rule.ChefTagEffect["1"]
+                }
+                if (rule.ChefTagEffect["2"]){
+                    sexReward[1] = rule.ChefTagEffect["2"]
+                }
             }
 
             //酸甜苦辣鲜咸影响
