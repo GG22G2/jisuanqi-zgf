@@ -412,15 +412,15 @@ export default {
   display: flex;
   gap: 0;
   align-items: flex-end;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #dcdfe6;
   margin-bottom: 0;
 }
 
 .tab-button {
-  border: 1px solid #d1d5db;
+  border: 1px solid #dcdfe6;
   border-bottom: none;
-  background: #f5f5f5;
-  color: #4b5563;
+  background: #f5f7fa;
+  color: #606266;
   border-radius: 4px 4px 0 0;
   padding: 10px 20px;
   cursor: pointer;
@@ -432,19 +432,19 @@ export default {
 }
 
 .tab-button:hover {
-  color: #111827;
-  background: #f0f0f0;
+  color: #409eff;
+  background: #ecf5ff;
 }
 
 .tab-button.active {
-  color: #111827;
+  color: #409eff;
   background: #fff;
-  border-color: #d1d5db;
+  border-color: #dcdfe6;
   border-bottom-color: #fff;
 }
 
 .tab-content-wrap {
-  border: 1px solid #d1d5db;
+  border: 1px solid #dcdfe6;
   border-top: none;
   background: #fff;
   border-radius: 0 4px 4px 4px;
@@ -456,7 +456,7 @@ export default {
 }
 
 .panel-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid #ebeef5;
   border-radius: 6px;
   padding: 14px 14px 10px;
   background: #fff;
@@ -480,7 +480,7 @@ export default {
 
 .form-label {
   min-width: 260px;
-  color: #111827;
+  color: #303133;
   font-size: 14px;
   line-height: 20px;
 }
@@ -488,19 +488,20 @@ export default {
 .control {
   height: 32px;
   min-width: 120px;
-  border: 1px solid #d1d5db;
+  border: 1px solid #dcdfe6;
   border-radius: 4px;
   padding: 0 10px;
   font-size: 14px;
-  color: #111827;
+  color: #606266;
   background: #fff;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
   box-sizing: border-box;
 }
 
 .control:focus {
-  border-color: #111827;
+  border-color: #409eff;
+  box-shadow: 0 0 0 1px #409eff inset;
 }
 
 .rule-select {
@@ -526,8 +527,8 @@ export default {
   position: absolute;
   inset: 0;
   border-radius: 999px;
-  border: 1px solid #cfd4dc;
-  background: #e5e7eb;
+  border: 1px solid #dcdfe6;
+  background: #dcdfe6;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
@@ -545,8 +546,8 @@ export default {
 }
 
 .switch-input:checked + .switch-track {
-  background: #6b7280;
-  border-color: #6b7280;
+  background: #409eff;
+  border-color: #409eff;
 }
 
 .switch-input:checked + .switch-track::after {
@@ -554,48 +555,48 @@ export default {
 }
 
 .switch-input:focus-visible + .switch-track {
-  outline: 2px solid #9ca3af;
+  outline: 2px solid #a0cfff;
   outline-offset: 2px;
 }
 
 .btn-primary {
-  border: 1px solid #6b7280;
-  background: #f8fafc;
-  color: #111827;
+  border: 1px solid #79bbff;
+  background: #ecf5ff;
+  color: #409eff;
   border-radius: 4px;
   height: 32px;
   padding: 0 18px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  box-shadow: 0 0 0 0 rgba(17, 24, 39, 0);
+  box-shadow: 0 0 0 0 rgba(64, 158, 255, 0);
   transition: background-color 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s,
     transform 0.05s;
 }
 
 .btn-primary:not(:disabled):hover {
-  background: #e5ecf5;
-  color: #111827;
-  border-color: #1f2937;
-  box-shadow: inset 0 0 0 1px rgba(31, 41, 55, 0.24);
+  background: #d9ecff;
+  color: #337ecc;
+  border-color: #409eff;
+  box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.2);
 }
 
 .btn-primary:not(:disabled):active {
-  background: #ced9e8;
-  border-color: #1f2937;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  background: #c6e2ff;
+  border-color: #337ecc;
+  box-shadow: inset 0 1px 2px rgba(51, 126, 204, 0.25);
   transform: translateY(1px);
 }
 
 .btn-primary:focus-visible {
-  outline: 2px solid #9ca3af;
+  outline: 2px solid #a0cfff;
   outline-offset: 1px;
 }
 
 .btn-primary:disabled {
-  background: #f3f4f6;
-  border-color: #d1d5db;
-  color: #9aa1ad;
+  background: #f5f7fa;
+  border-color: #e4e7ed;
+  color: #c0c4cc;
   opacity: 1;
   cursor: not-allowed;
 }
@@ -604,9 +605,9 @@ export default {
   margin: 14px 0;
   padding: 8px 12px;
   border-radius: 4px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  color: #111827;
+  background: #ecf5ff;
+  border: 1px solid #d9ecff;
+  color: #409eff;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -629,7 +630,7 @@ export default {
 }
 
 .chef-card {
-  border: 1px solid #e5e7eb;
+  border: 1px solid #ebeef5;
   border-radius: 6px;
   padding: 12px;
   display: grid;
@@ -637,7 +638,7 @@ export default {
   gap: 10px;
   align-items: start;
   font-size: 14px;
-  color: #111827;
+  color: #303133;
   background: #fff;
 }
 
@@ -646,7 +647,7 @@ export default {
 }
 
 .chef-equip {
-  color: #6b7280;
+  color: #909399;
 }
 
 .chef-recipes,
@@ -657,23 +658,23 @@ export default {
 }
 
 .chef-values {
-  color: #4b5563;
+  color: #606266;
 }
 
 .tips-text {
-  color: #4b5563;
+  color: #606266;
   font-size: 14px;
   line-height: 1.6;
   margin-bottom: 14px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: #f5f7fa;
+  border: 1px solid #ebeef5;
   border-radius: 4px;
   padding: 10px 12px;
 }
 
 .desc-panel p {
   margin: 6px 0;
-  color: #4b5563;
+  color: #606266;
   line-height: 1.6;
 }
 
@@ -709,15 +710,15 @@ export default {
 }
 
 .toast-success {
-  background: #111827;
+  background: #67c23a;
 }
 
 .toast-error {
-  background: #7f1d1d;
+  background: #f56c6c;
 }
 
 .toast-info {
-  background: #1f2937;
+  background: #409eff;
 }
 
 @media (max-width: 768px) {
