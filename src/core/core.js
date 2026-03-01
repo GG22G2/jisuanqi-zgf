@@ -23,6 +23,10 @@ class GodInference {
     constructor(officialGameData, myGameData, recipeReward, sexReward, materials, calConfig) {
         this.useEquip = false;
         this.ownChefTopK = 3;
+        this.baseOwnChefTopK = 3;
+        this.enableDynamicTopK = false;
+        this.estimatedCandidateKeepRate = 1.12;
+        this.maxEstimatedCandidateExtra = 800;
 
         if (calConfig != null) {
             this.chefMinRarity = calConfig.chefMinRarity;
@@ -32,6 +36,14 @@ class GodInference {
             this.useEquip = calConfig.useEquip;
             this.mustChefs = calConfig.mustChefs;
             this.ownChefTopK = calConfig.ownChefTopK == null ? 3 : calConfig.ownChefTopK;
+            this.baseOwnChefTopK = calConfig.baseOwnChefTopK == null ? 3 : calConfig.baseOwnChefTopK;
+            this.enableDynamicTopK = calConfig.enableDynamicTopK === true;
+            if (calConfig.estimatedCandidateKeepRate != null) {
+                this.estimatedCandidateKeepRate = Math.max(1, calConfig.estimatedCandidateKeepRate);
+            }
+            if (calConfig.maxEstimatedCandidateExtra != null) {
+                this.maxEstimatedCandidateExtra = Math.max(0, calConfig.maxEstimatedCandidateExtra | 0);
+            }
         }
 
         //拥有的厨师，菜谱，厨具
@@ -74,6 +86,8 @@ class GodInference {
         GodInference.modifyChefValue(this.ownChefs, this.globalAddtion);
         GodInference.modifyChefValue(this.presenceChefs, this.globalAddtion);
         this.buildRecipeTags();
+        this.estimatedChefs = [...this.ownChefs, ...this.presenceChefs];
+        this.estimatedQualityCal = new Calculator(this.globalAddtion.useall, this.recipeReward, this.sexReward);
 
     }
 
@@ -93,9 +107,32 @@ class GodInference {
 
 
         const playRecipesArr = new Int32Array(this.playRecipeGroup.length * 9);
+        const needPrioritize = this.enableDynamicTopK;
+        const groupOrder = new Int32Array(this.playRecipeGroup.length);
+        for (let i = 0; i < this.playRecipeGroup.length; i++) {
+            groupOrder[i] = i;
+        }
+        if (needPrioritize) {
+            const rankList = new Array(this.playRecipeGroup.length);
+            for (let i = 0; i < this.playRecipeGroup.length; i++) {
+                const group = this.playRecipeGroup[i];
+                let score = 0;
+                for (let j = 0; j < 9; j++) {
+                    const item = group[j];
+                    const recipe = item.recipe;
+                    const estimatedRewardPrice = recipe.estimatedRewardPrice != null ? recipe.estimatedRewardPrice : (recipe.rewardPrice != null ? recipe.rewardPrice : recipe.price);
+                    score += (estimatedRewardPrice * item.count) | 0;
+                }
+                rankList[i] = { index: i, score };
+            }
+            rankList.sort((a, b) => b.score - a.score);
+            for (let i = 0; i < rankList.length; i++) {
+                groupOrder[i] = rankList[i].index;
+            }
+        }
 
         for (let i = 0; i < this.playRecipeGroup.length; i++) {
-            let playRecipes = this.playRecipeGroup[i];
+            let playRecipes = this.playRecipeGroup[groupOrder[i]];
             for (let j = 0; j < 9; j++) {
                 playRecipesArr[i * 9 + j] = playRecipes[j].index    //idToIndex.get(playRecipes[j].getRecipe().recipeId)
             }
@@ -103,15 +140,9 @@ class GodInference {
             this.sortArraySegment(playRecipesArr, i * 9, i * 9 + 8)
         }
 
-        let topPlayChefs = [];
         let total = this.playRecipeGroup.length;
-        let groupNum = 1; //线程数
-        let maxScoreKey = BigInt(0);
-        let maxScoreResult;
-        let works = []
+        let maxScoreResult = null;
         let that = this;
-
-        let curP = 0;
 
         const recipePL = recipepl.disordePermuation_$LI$();
 
@@ -150,25 +181,39 @@ class GodInference {
             chefMasks: this.tempCalCache.chefMasks,
             chefMatchMasks: this.tempCalCache.chefMatchMasks,
             chefRealIndex: chefRealIndex,
-            ownChefTopK: this.ownChefTopK
+            ownChefTopK: this.ownChefTopK,
+            baseOwnChefTopK: this.baseOwnChefTopK,
+            enableDynamicTopK: this.enableDynamicTopK && this.ownChefTopK > this.baseOwnChefTopK
         }
 
         return new Promise(async resolve => {
             let chefAndRecipeThread = new ChefAndRecipeThread();
             await chefAndRecipeThread.setBaseData(data);
-            let result = chefAndRecipeThread.call(0, total);
 
-            //let result = await chefAndRecipeThread.callWithGpu(0, total);
-
-            console.log('callWithGpu',result)
-
-            //计算完成，安排下一个任务
-            const topScoreKey = result.maxScore;
-            if (topScoreKey > maxScoreKey) {
-                maxScoreKey = topScoreKey;
-                maxScoreResult = result;
+            let isMobile = false;
+            if (typeof navigator !== 'undefined') {
+                isMobile = !!navigator.userAgent.match(
+                    /(phone|pad|pod|iPhone|iPod|ios|iPad|Android|Mobile|BlackBerry|IEMobile|MQQBrowser|JUC|Fennec|wOSBrowser|BrowserNG|WebOS|Symbian|Windows Phone)/i,
+                );
             }
-            topPlayChefs = that.parseLong(playRecipesArr, maxScoreResult);
+            if (this.enableDynamicTopK && this.ownChefTopK <= this.baseOwnChefTopK) {
+                console.warn('[dynamicTopK] 已开启但未生效：需要 ownChefTopK > baseOwnChefTopK');
+            }
+            const useGpuStage2 = !isMobile && typeof navigator !== 'undefined' && !!navigator.gpu;
+            if (!isMobile && typeof navigator !== 'undefined' && !navigator.gpu) {
+                console.warn('[GPU] 当前浏览器不支持 WebGPU，使用 CPU 路径');
+            }
+            if (useGpuStage2) {
+                maxScoreResult = await chefAndRecipeThread.callWithGpu(0, total);
+            } else {
+                maxScoreResult = chefAndRecipeThread.call(0, total);
+            }
+
+            if (maxScoreResult == null || maxScoreResult.recipes == null) {
+                resolve(null);
+                return;
+            }
+            const topPlayChefs = that.parseLong(playRecipesArr, maxScoreResult);
             end = Date.now();
             console.info("总用时 " + (end - start) + "ms");
             resolve(that.calSecondStage(topPlayChefs));
@@ -374,7 +419,10 @@ class GodInference {
                 const bRank = Math.max(b.score / safeMaxScore, b.estimatedScore / safeMaxEstimatedScore);
                 return bRank - aRank;
             });
-            candidates.length = baseCount;
+            let targetCount = Math.ceil(baseCount * this.estimatedCandidateKeepRate);
+            targetCount = Math.min(targetCount, baseCount + this.maxEstimatedCandidateExtra);
+            targetCount = Math.max(baseCount, targetCount);
+            candidates.length = Math.min(targetCount, candidates.length);
             this.playRecipeGroup = candidates.map((item) => item.playRecipeGroup);
         }
         console.timeEnd('排列菜谱')
@@ -416,8 +464,11 @@ class GodInference {
             let ownRecipe = recipes[i];
             const reward = this.recipeReward[ownRecipe.recipeId];
 
-            //单技法要求按照500来看，双技法要求按照400来估算，评估一个技法值
-            const t2 = this.estimatedChefAdd(ownRecipe);
+            let t2 = ownRecipe.estimatedChefAdd;
+            if (t2 == null) {
+                t2 = this.estimatedChefAdd(ownRecipe);
+                ownRecipe.estimatedChefAdd = t2;
+            }
 
             prices[ownRecipe.recipeId] = ((ownRecipe.price * (1 + reward + t2) * quantity[ownRecipe.recipeId]) | 0);
         }
@@ -429,22 +480,70 @@ class GodInference {
     }
 
     estimatedChefAdd(recipe) {
+        const chefs = this.estimatedChefs;
+        const qualityCal = this.estimatedQualityCal;
+        if (chefs == null || chefs.length === 0 || qualityCal == null) {
+            return this.legacyEstimatedChefAdd(recipe);
+        }
+
+        let best1 = -1;
+        let best2 = -1;
+        let best3 = -1;
+        for (let i = 0; i < chefs.length; i++) {
+            const chef = chefs[i];
+            const skillEffect = chef.skillEffect;
+            if (skillEffect == null) {
+                continue;
+            }
+            const score = qualityCal.qualityAddNoEquip(chef, skillEffect, recipe);
+            if (score > best1) {
+                best3 = best2;
+                best2 = best1;
+                best1 = score;
+            } else if (score > best2) {
+                best3 = best2;
+                best2 = score;
+            } else if (score > best3) {
+                best3 = score;
+            }
+            if (best1 >= 1 && best2 >= 1 && best3 >= 1) {
+                break;
+            }
+        }
+
+        if (best1 < 0) {
+            return this.legacyEstimatedChefAdd(recipe);
+        }
+        const q1 = Math.max(best1, 0);
+        if (best2 < 0) {
+            return q1;
+        }
+        const q2 = Math.max(best2, 0);
+        const q3 = Math.max(best3, 0);
+        return Math.min(1, q1 * 0.65 + q2 * 0.25 + q3 * 0.1);
+    }
+
+    legacyEstimatedChefAdd(recipe) {
         const abc = [-1, 0, 0.1, 0.3, 0.5, 1.0];
         const v1 = 500, v2 = 400;
 
-        // 收集所有非零技法值
+        // 仅使用该菜谱要求的技法进行估算
         const skills = [];
         for (const key of ['bake', 'boil', 'stirfry', 'knife', 'fry', 'steam']) {
             const value = recipe[key];
-            skills.push(value);
+            if (value > 0) {
+                skills.push(value);
+            }
+        }
+        if (skills.length === 0) {
+            return 0;
         }
         skills.sort((a, b) => b - a); // 降序排列
 
-        const t = skills.length;
-
         let a = Math.min(v1 / skills[0], 5) | 0; // 最高技法与v1比较
-        let b = Math.min(v2 / skills[1], 5) | 0; // 次高技法与v2比较
-        return Math.min(abc[a], abc[b]);
+        let b = skills.length > 1 ? (Math.min(v2 / skills[1], 5) | 0) : 5; // 单技法时不惩罚
+        const value = Math.min(abc[a], abc[b]);
+        return Math.max(0, value);
     }
 
     sortArraySegment(arr, start, end) {
@@ -575,7 +674,13 @@ class GodInference {
         //计算奖励倍数加持下,根据剩余食材计算各个菜最多做多少份
         this.calQuantityAndPriceFromLastResult(this.tempOwnRecipes, recipeCounts, topKHeap, lastMaterialBit
             , materialCount, lastRecipeCount, lastPrice, ignoreRecipeId);
-        let priceTopKResult = topKHeap.getAll();
+        let priceTopKResult = topKHeap.getAll().slice();
+        priceTopKResult.sort((a, b) => {
+            if (a === b) {
+                return 0;
+            }
+            return a < b ? -1 : 1;
+        });
 
         const length = Math.min(limit, priceTopKResult.length)
         let removesRecipeIndex = [];
@@ -1219,6 +1324,10 @@ class CalConfig {
         this.useAll = useAll;//拥有全厨师全修炼，全菜谱全专精
         this.mustChefs = ['二郎神'] //不收recipeLimit影响，参与计算的厨师
         this.ownChefTopK = ownChefTopK == null ? 3 : Math.max(3, ownChefTopK | 0);
+        this.baseOwnChefTopK = 3;
+        this.enableDynamicTopK = true;
+        this.estimatedCandidateKeepRate = 1.12; // 允许保留部分估分高但基础分未达阈值的组合
+        this.maxEstimatedCandidateExtra = 800; // 控制额外候选上限，避免候选爆炸
     }
 
 }

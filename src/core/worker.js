@@ -16,9 +16,13 @@ export class ChefAndRecipeThread {
         this.groupMaxScore = null;
         this.groupMaxScoreChefIndex = null;
         this.groupBestScore = null;
+        this.groupBestScoreBase = null;
         this.chefRealIndex = null;
         this.recipeCount = 0;
         this.ownChefTopK = 3;
+        this.baseOwnChefTopK = 3;
+        this.enableDynamicTopK = true;
+        this.baseCandidateSlots = null;
 
     }
 
@@ -37,21 +41,31 @@ export class ChefAndRecipeThread {
                           chefMasks,
                           chefMatchMasks,
                           chefRealIndex,
-                          ownChefTopK
+                          ownChefTopK,
+                          baseOwnChefTopK,
+                          enableDynamicTopK
                       }) {
         this.playRecipes = playRecipesArr;
         this.recipePL = recipePL
         this.ownChefTopK = ownChefTopK == null ? 3 : Math.max(3, ownChefTopK | 0);
+        this.baseOwnChefTopK = baseOwnChefTopK == null ? 3 : Math.max(1, baseOwnChefTopK | 0);
+        this.enableDynamicTopK = enableDynamicTopK !== false;
 
         let result = null;
         let isMobile = navigator.userAgent.match(/(phone|pad|pod|iPhone|iPod|ios|iPad|Android|Mobile|BlackBerry|IEMobile|MQQBrowser|JUC|Fennec|wOSBrowser|BrowserNG|WebOS|Symbian|Windows Phone)/i);
         console.time('计算每三道菜最高得分的厨师')
-        if (isMobile || !navigator.gpu || this.ownChefTopK !== 3) {
-             result = this.calAllCache(scoreCache, recipeCount
-                 , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount, this.ownChefTopK);
-        }else {
-             result = await this.computeWithWebGPU(scoreCache, recipeCount
+        if (isMobile || !navigator.gpu) {
+            result = this.calAllCache(scoreCache, recipeCount
                 , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount, this.ownChefTopK);
+        } else {
+            try {
+                result = await this.computeWithWebGPU(scoreCache, recipeCount
+                    , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount, this.ownChefTopK);
+            } catch (e) {
+                console.warn('[GPU] 第一阶段计算失败，自动回退 CPU 路径', e);
+                result = this.calAllCache(scoreCache, recipeCount
+                    , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount, this.ownChefTopK);
+            }
         }
         console.timeEnd('计算每三道菜最高得分的厨师')
 
@@ -83,6 +97,16 @@ export class ChefAndRecipeThread {
         const chefT = this.presenceChefCount + this.ownChefTopK;
         const groupCount = (this.groupMaxScore.length / chefT) | 0;
         this.groupBestScore = new Int32Array(groupCount);
+        this.groupBestScoreBase = new Int32Array(groupCount);
+        const baseOwnTopK = Math.min(this.baseOwnChefTopK, this.ownChefTopK);
+        const baseCandidateSlots = new Int16Array(baseOwnTopK + this.presenceChefCount);
+        for (let i = 0; i < baseOwnTopK; i++) {
+            baseCandidateSlots[i] = i;
+        }
+        for (let i = 0; i < this.presenceChefCount; i++) {
+            baseCandidateSlots[baseOwnTopK + i] = this.ownChefTopK + i;
+        }
+        this.baseCandidateSlots = baseCandidateSlots;
         for (let g = 0, base = 0; g < groupCount; g++, base += chefT) {
             let best = 0;
             for (let c = 0; c < chefT; c++) {
@@ -92,6 +116,16 @@ export class ChefAndRecipeThread {
                 }
             }
             this.groupBestScore[g] = best;
+
+            let baseBest = 0;
+            for (let i = 0; i < baseCandidateSlots.length; i++) {
+                const slot = baseCandidateSlots[i];
+                const score = this.groupMaxScore[base + slot];
+                if (score > baseBest) {
+                    baseBest = score;
+                }
+            }
+            this.groupBestScoreBase[g] = baseBest;
         }
         //console.log(calAllCache1)
 
@@ -105,7 +139,6 @@ export class ChefAndRecipeThread {
         let startTime = Date.now(), endTime = 0;
 
         let maxScore = 0;
-        let score1Index, score2Index, score3Index;
         let maxScoreChefGroup = new Array(3);
         let chefMasks = this.chefMasks;
         let chefMatchMasks = this.chefMatchMasks;
@@ -119,15 +152,23 @@ export class ChefAndRecipeThread {
         const recipeCount = this.recipeCount;
         let chefRealIndex = this.chefRealIndex;
         const groupBestScore = this.groupBestScore;
+        const groupBestScoreBase = this.groupBestScoreBase;
         const groupMaxScore = this.groupMaxScore;
         const groupMaxScoreChefIndex = this.groupMaxScoreChefIndex;
+        const useDynamicTopK = this.enableDynamicTopK && this.ownChefTopK > Math.min(this.baseOwnChefTopK, this.ownChefTopK);
+        const baseCandidateSlots = this.baseCandidateSlots;
 
         const temp = this.playRecipes;
+        const groupCount = limit - start;
+        if (groupCount <= 0) {
+            return result;
+        }
 
        // let playRecipes = new Int32Array(temp.length * 1680);
-        let playRecipes = new Uint16Array(temp.length * 1680);
-        for (let i = start; i < limit; i++) {
-            const index = i * 9;
+        let playRecipes = new Uint16Array(groupCount * 1680 * 9);
+        for (let i = 0; i < groupCount; i++) {
+            const srcGroupIndex = start + i;
+            const index = srcGroupIndex * 9;
             for (let k = 0; k < 1680; k++) {
                 const ints = this.recipePL[k];
                 for (let j = 0; j < 9; j++) {
@@ -144,69 +185,184 @@ export class ChefAndRecipeThread {
             const g1 = this.getIndex(playRecipes[t + 0],playRecipes[t + 1],playRecipes[t + 2],recipeCount);
             const g2 = this.getIndex(playRecipes[t + 3],playRecipes[t + 4],playRecipes[t + 5],recipeCount);
             const g3 = this.getIndex(playRecipes[t + 6],playRecipes[t + 7],playRecipes[t + 8],recipeCount);
-            if (groupBestScore[g1] + groupBestScore[g2] + groupBestScore[g3] <= maxScore) {
+            const fullUpperBound = groupBestScore[g1] + groupBestScore[g2] + groupBestScore[g3];
+            if (fullUpperBound <= maxScore) {
                 continue;
             }
 
-            score1Index = g1 * chefT;
-            score2Index = g2 * chefT;
-            score3Index = g3 * chefT;
+            const score1Index = g1 * chefT;
+            const score2Index = g2 * chefT;
+            const score3Index = g3 * chefT;
 
             //给每个厨师生成一个条件码，这里判断如果符合条件，则进入光环技能判断流程。
             //比如刘昂星如果有 兰飞鸿的技能，则兰飞鸿必须在场，特殊技能的厨师生成一个特殊的标识，这里做一次匹配
 
             //有某个厨师重复出现，则便利所有可能
 
-            for (let c1 = 0; c1 < chefT; c1++) {
-                const s1 = groupMaxScore[score1Index + c1];
-                if (s1 === 0 || s1 + groupBestScore[g2] + groupBestScore[g3] <= maxScore) {
-                    continue;
-                }
-                for (let c2 = 0; c2 < chefT; c2++) {
-                    const s2 = groupMaxScore[score2Index + c2];
-                    if (s2 === 0) {
-                        continue;
-                    }
-                    const s12 = s1 + s2;
-                    if (s12 + groupBestScore[g3] <= maxScore) {
-                        continue;
-                    }
-                    for (let c3 = 0; c3 < chefT; c3++) {
-                        const s3 = groupMaxScore[score3Index + c3];
-                        if (s3 === 0) {
+            if (useDynamicTopK) {
+                const baseUpperBound = groupBestScoreBase[g1] + groupBestScoreBase[g2] + groupBestScoreBase[g3];
+                if (baseUpperBound > maxScore) {
+                    for (let i1 = 0; i1 < baseCandidateSlots.length; i1++) {
+                        const c1 = baseCandidateSlots[i1];
+                        const s1 = groupMaxScore[score1Index + c1];
+                        if (s1 === 0 || s1 + groupBestScoreBase[g2] + groupBestScoreBase[g3] <= maxScore) {
                             continue;
                         }
-                        let score = s12 + s3;
-                        if (score > maxScore) {
-                            //如果最大分数冲突，则遍历所有确定最大分
-                            let chef1 = groupMaxScoreChefIndex[score1Index + c1]
-                            let chef2 = groupMaxScoreChefIndex[score2Index + c2]
-                            let chef3 = groupMaxScoreChefIndex[score3Index + c3]
+                        for (let i2 = 0; i2 < baseCandidateSlots.length; i2++) {
+                            const c2 = baseCandidateSlots[i2];
+                            const s2 = groupMaxScore[score2Index + c2];
+                            if (s2 === 0) {
+                                continue;
+                            }
+                            const s12 = s1 + s2;
+                            if (s12 + groupBestScoreBase[g3] <= maxScore) {
+                                continue;
+                            }
+                            for (let i3 = 0; i3 < baseCandidateSlots.length; i3++) {
+                                const c3 = baseCandidateSlots[i3];
+                                const s3 = groupMaxScore[score3Index + c3];
+                                if (s3 === 0) {
+                                    continue;
+                                }
+                                const score = s12 + s3;
+                                if (score <= maxScore) {
+                                    continue;
+                                }
+                                let chef1 = groupMaxScoreChefIndex[score1Index + c1];
+                                let chef2 = groupMaxScoreChefIndex[score2Index + c2];
+                                let chef3 = groupMaxScoreChefIndex[score3Index + c3];
+
+                                let realChef1 = chefRealIndex[chef1];
+                                let realChef2 = chefRealIndex[chef2];
+                                let realChef3 = chefRealIndex[chef3];
+                                if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
+                                    let mm1 = chefMatchMasks[chef1];
+                                    let mm2 = chefMatchMasks[chef2];
+                                    let mm3 = chefMatchMasks[chef3];
+                                    if ((mm1 | mm2 | mm3) !== 0) {
+                                        let m1 = chefMasks[chef1];
+                                        let m2 = chefMasks[chef2];
+                                        let m3 = chefMasks[chef3];
+                                        let p1 = mm1 & (m2 | m3);
+                                        let p2 = mm2 & (m1 | m3);
+                                        let p3 = mm3 & (m1 | m2);
+                                        if (p1 !== mm1 || p2 !== mm2 || p3 !== mm3) {
+                                            continue;
+                                        }
+                                    }
+
+                                    maxScore = score;
+                                    result.maxScore = maxScore;
+                                    result.maxScoreChefGroup = [chef1, chef2, chef3];
+                                    result.recipes = playRecipes.slice(t, t + 9);
+                                    result.scores = [s1, s2, s3];
+                                }
+                            }
+                        }
+                    }
+                }
+                if (fullUpperBound > maxScore && fullUpperBound > baseUpperBound) {
+                    for (let c1 = 0; c1 < chefT; c1++) {
+                        const s1 = groupMaxScore[score1Index + c1];
+                        if (s1 === 0 || s1 + groupBestScore[g2] + groupBestScore[g3] <= maxScore) {
+                            continue;
+                        }
+                        for (let c2 = 0; c2 < chefT; c2++) {
+                            const s2 = groupMaxScore[score2Index + c2];
+                            if (s2 === 0) {
+                                continue;
+                            }
+                            const s12 = s1 + s2;
+                            if (s12 + groupBestScore[g3] <= maxScore) {
+                                continue;
+                            }
+                            for (let c3 = 0; c3 < chefT; c3++) {
+                                const s3 = groupMaxScore[score3Index + c3];
+                                if (s3 === 0) {
+                                    continue;
+                                }
+                                const score = s12 + s3;
+                                if (score <= maxScore) {
+                                    continue;
+                                }
+                                let chef1 = groupMaxScoreChefIndex[score1Index + c1];
+                                let chef2 = groupMaxScoreChefIndex[score2Index + c2];
+                                let chef3 = groupMaxScoreChefIndex[score3Index + c3];
+
+                                let realChef1 = chefRealIndex[chef1];
+                                let realChef2 = chefRealIndex[chef2];
+                                let realChef3 = chefRealIndex[chef3];
+                                if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
+                                    let mm1 = chefMatchMasks[chef1];
+                                    let mm2 = chefMatchMasks[chef2];
+                                    let mm3 = chefMatchMasks[chef3];
+                                    if ((mm1 | mm2 | mm3) !== 0) {
+                                        let m1 = chefMasks[chef1];
+                                        let m2 = chefMasks[chef2];
+                                        let m3 = chefMasks[chef3];
+                                        let p1 = mm1 & (m2 | m3);
+                                        let p2 = mm2 & (m1 | m3);
+                                        let p3 = mm3 & (m1 | m2);
+                                        if (p1 !== mm1 || p2 !== mm2 || p3 !== mm3) {
+                                            continue;
+                                        }
+                                    }
+
+                                    maxScore = score;
+                                    result.maxScore = maxScore;
+                                    result.maxScoreChefGroup = [chef1, chef2, chef3];
+                                    result.recipes = playRecipes.slice(t, t + 9);
+                                    result.scores = [s1, s2, s3];
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                for (let c1 = 0; c1 < chefT; c1++) {
+                    const s1 = groupMaxScore[score1Index + c1];
+                    if (s1 === 0 || s1 + groupBestScore[g2] + groupBestScore[g3] <= maxScore) {
+                        continue;
+                    }
+                    for (let c2 = 0; c2 < chefT; c2++) {
+                        const s2 = groupMaxScore[score2Index + c2];
+                        if (s2 === 0) {
+                            continue;
+                        }
+                        const s12 = s1 + s2;
+                        if (s12 + groupBestScore[g3] <= maxScore) {
+                            continue;
+                        }
+                        for (let c3 = 0; c3 < chefT; c3++) {
+                            const s3 = groupMaxScore[score3Index + c3];
+                            if (s3 === 0) {
+                                continue;
+                            }
+                            const score = s12 + s3;
+                            if (score <= maxScore) {
+                                continue;
+                            }
+                            let chef1 = groupMaxScoreChefIndex[score1Index + c1];
+                            let chef2 = groupMaxScoreChefIndex[score2Index + c2];
+                            let chef3 = groupMaxScoreChefIndex[score3Index + c3];
 
                             let realChef1 = chefRealIndex[chef1];
                             let realChef2 = chefRealIndex[chef2];
                             let realChef3 = chefRealIndex[chef3];
-                            //debugger
                             if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
-
-                                //特征比较
                                 let mm1 = chefMatchMasks[chef1];
                                 let mm2 = chefMatchMasks[chef2];
                                 let mm3 = chefMatchMasks[chef3];
                                 if ((mm1 | mm2 | mm3) !== 0) {
-                                    //有特殊要求，需要具体计算
                                     let m1 = chefMasks[chef1];
                                     let m2 = chefMasks[chef2];
                                     let m3 = chefMasks[chef3];
-                                    let p1 = mm1 & (m2 | m3)
-                                    let p2 = mm2 & (m1 | m3)
-                                    let p3 = mm3 & (m1 | m2)
+                                    let p1 = mm1 & (m2 | m3);
+                                    let p2 = mm2 & (m1 | m3);
+                                    let p3 = mm3 & (m1 | m2);
                                     if (p1 !== mm1 || p2 !== mm2 || p3 !== mm3) {
-                                        continue
+                                        continue;
                                     }
-                                    // if (score === 2001329){
-                                    //     debugger
-                                    // }
                                 }
 
                                 maxScore = score;
@@ -243,28 +399,33 @@ export class ChefAndRecipeThread {
         console.log("[GPU] callWithGpu 开始执行，范围:", start, "到", limit);
         const startTime = Date.now();
 
-        const numCombinations = limit - start;
-        if (numCombinations <= 0) {
+        const numGroups = limit - start;
+        if (numGroups <= 0) {
             console.warn("[GPU] 警告: 计算范围为空，直接返回。");
             return { maxScore: 0, maxScoreChefGroup: new Array(3), recipes: null, scores: null };
         }
 
         // --- 步骤 1: CPU 端数据预处理 (已修正) ---
         // 直接创建 Uint32Array 以匹配 WGSL 中的 u32 类型，并保证4字节对齐
+        const recipePermutationCount = this.recipePL.length;
+        const numCombinations = numGroups * recipePermutationCount;
         const playRecipes = new Uint32Array(numCombinations * 9);
         const temp = this.playRecipes;
         const recipePL = this.recipePL;
-        for (let i = 0; i < numCombinations; i++) {
-            const pIndex = start + i;
-            const playRecipeBaseIndex = i * 9;
-            const tempBaseIndex = pIndex * 9;
-            const ints = recipePL[0];
-            for (let j = 0; j < 9; j++) {
-                // 将 Uint16 的菜谱ID 存入 Uint32 数组
-                playRecipes[playRecipeBaseIndex + j] = temp[tempBaseIndex + ints[j]];
+        for (let i = 0; i < numGroups; i++) {
+            const groupIndex = start + i;
+            const tempBaseIndex = groupIndex * 9;
+            const dstGroupBase = i * recipePermutationCount * 9;
+            for (let k = 0; k < recipePermutationCount; k++) {
+                const dstRecipeBase = dstGroupBase + k * 9;
+                const ints = recipePL[k];
+                for (let j = 0; j < 9; j++) {
+                    // 将 Uint16 的菜谱ID 存入 Uint32 数组
+                    playRecipes[dstRecipeBase + j] = temp[tempBaseIndex + ints[j]];
+                }
             }
         }
-        console.log(`[GPU] 数据预处理完成，创建了 ${numCombinations} 组菜谱组合 (Uint32Array)。`);
+        console.log(`[GPU] 数据预处理完成，创建了 ${numCombinations} 个排列组合 (Uint32Array)。`);
 
         // --- 步骤 2: WebGPU 初始化 ---
         let device;
@@ -282,14 +443,7 @@ export class ChefAndRecipeThread {
         console.log("[GPU] WebGPU 设备初始化成功。");
 
         try {
-            const chefT = this.presenceChefCount + 3;
-
-            const maxChefIndex = this.groupMaxScoreChefIndex.reduce((max, val) => Math.max(max, val), 0);
-            console.log(`[GPU] 检查: 厨师最大索引为 ${maxChefIndex}。`);
-            if (maxChefIndex >= 1024) {
-                console.error(`[GPU] 致命逻辑错误: 厨师索引 (${maxChefIndex}) 超出着色器打包限制(1023)！`);
-                return this.call(start, limit);
-            }
+            const chefT = this.presenceChefCount + this.ownChefTopK;
 
             // --- 创建并写入 GPU 缓冲区 (已修正) ---
             console.log("[GPU] 开始创建和写入GPU缓冲区...");
@@ -319,21 +473,25 @@ export class ChefAndRecipeThread {
             const outputBuffer = device.createBuffer({ size: outputBufferSize, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
             console.log(`[GPU] 缓冲区创建完成，输出缓冲区大小: ${outputBufferSize / 1024} KB`);
 
+            const maxDispatchX = 65535;
+            const dispatchX = Math.min(numCombinations, maxDispatchX);
+            const dispatchY = Math.ceil(numCombinations / dispatchX);
+
             // --- WGSL 着色器与管线 (保持不变) ---
             const shaderCode = `
             // ... (此处省略与之前相同的WGSL代码) ...
             fn calI(i: i32, N: i32) -> i32 { let term1 = i * (i - 1) * (i - 3 * N - 2) / 6; let term2 = i * N * (N + 1) / 2; return term1 + term2; }
             fn calJ(i: i32, j: i32, N: i32) -> i32 { let count = j - i; let start = N - i - 2; let end = start - count + 1; return (start + end) * count / 2; }
             fn getIndex(i: u32, j: u32, k: u32, recipeCount: u32) -> u32 { let c1 = calI(i32(i), i32(recipeCount) - 2); let c2 = calJ(i32(i), i32(j) - 1, i32(recipeCount)); let c3 = k - j - 1; return u32(c1 + c2 + i32(c3)); }
-            struct WorkgroupResult { maxScore: atomic<i32>, packedChefs: atomic<u32>, score1: atomic<i32>, score2: atomic<i32>, score3: atomic<i32>, };
+            struct WorkgroupResult { maxScore: atomic<i32>, chef1: atomic<i32>, chef2: atomic<i32>, chef3: atomic<i32>, score1: atomic<i32>, score2: atomic<i32>, score3: atomic<i32>, };
             struct FinalResult { score: i32, chef1: i32, chef2: i32, chef3: i32, score1: i32, score2: i32, score3: i32, };
             @group(0) @binding(0) var<storage, read> playRecipes: array<u32>; @group(0) @binding(1) var<storage, read> groupMaxScore: array<i32>; @group(0) @binding(2) var<storage, read> groupMaxScoreChefIndex: array<i32>; @group(0) @binding(3) var<storage, read> chefRealIndex: array<i32>; @group(0) @binding(4) var<storage, read> chefMasks: array<i32>; @group(0) @binding(5) var<storage, read> chefMatchMasks: array<i32>; @group(0) @binding(6) var<storage, read_write> output: array<FinalResult>;
             var<workgroup> localBest: WorkgroupResult;
             @compute @workgroup_size(256)
             fn main(@builtin(local_invocation_id) local_id: vec3<u32>, @builtin(workgroup_id) workgroup_id: vec3<u32>) {
                 let recipeCount: u32 = ${this.recipeCount}; let chefT: u32 = ${chefT}; let numCombinations: u32 = ${numCombinations}; let workgroupSize: u32 = 256;
-                let combinationIndex = workgroup_id.x; if (combinationIndex >= numCombinations) { return; }
-                if (local_id.x == 0u) { atomicStore(&localBest.maxScore, 0); atomicStore(&localBest.packedChefs, 0u); atomicStore(&localBest.score1, 0); atomicStore(&localBest.score2, 0); atomicStore(&localBest.score3, 0); }
+                let combinationIndex = workgroup_id.x + workgroup_id.y * ${dispatchX}u; if (combinationIndex >= numCombinations) { return; }
+                if (local_id.x == 0u) { atomicStore(&localBest.maxScore, 0); atomicStore(&localBest.chef1, 0); atomicStore(&localBest.chef2, 0); atomicStore(&localBest.chef3, 0); atomicStore(&localBest.score1, 0); atomicStore(&localBest.score2, 0); atomicStore(&localBest.score3, 0); }
                 workgroupBarrier();
                 let recipeBaseIndex = combinationIndex * 9u;
                 let r1 = playRecipes[recipeBaseIndex + 0u]; let r2 = playRecipes[recipeBaseIndex + 1u]; let r3 = playRecipes[recipeBaseIndex + 2u];
@@ -356,15 +514,14 @@ export class ChefAndRecipeThread {
                             if (p1 != mm1 || p2 != mm2 || p3 != mm3) { continue; }
                         }
                         let oldMax = atomicMax(&localBest.maxScore, currentScore);
-                        if (currentScore > oldMax) { let packed = u32(chef1_idx) | (u32(chef2_idx) << 10) | (u32(chef3_idx) << 20); atomicStore(&localBest.packedChefs, packed); atomicStore(&localBest.score1, score1); atomicStore(&localBest.score2, score2); atomicStore(&localBest.score3, score3); }
+                        if (currentScore > oldMax) { atomicStore(&localBest.chef1, chef1_idx); atomicStore(&localBest.chef2, chef2_idx); atomicStore(&localBest.chef3, chef3_idx); atomicStore(&localBest.score1, score1); atomicStore(&localBest.score2, score2); atomicStore(&localBest.score3, score3); }
                     }
                 }
                 workgroupBarrier();
                 if (local_id.x == 0u) {
                     let finalScore = atomicLoad(&localBest.maxScore);
                     if (finalScore > 0) {
-                        let packed = atomicLoad(&localBest.packedChefs);
-                        let finalChef1 = i32(packed & 0x3FFu); let finalChef2 = i32((packed >> 10) & 0x3FFu); let finalChef3 = i32((packed >> 20) & 0x3FFu);
+                        let finalChef1 = atomicLoad(&localBest.chef1); let finalChef2 = atomicLoad(&localBest.chef2); let finalChef3 = atomicLoad(&localBest.chef3);
                         output[combinationIndex].score = finalScore; output[combinationIndex].chef1 = finalChef1; output[combinationIndex].chef2 = finalChef2; output[combinationIndex].chef3 = finalChef3;
                         output[combinationIndex].score1 = atomicLoad(&localBest.score1); output[combinationIndex].score2 = atomicLoad(&localBest.score2); output[combinationIndex].score3 = atomicLoad(&localBest.score3);
                     }
@@ -396,7 +553,7 @@ export class ChefAndRecipeThread {
             const passEncoder = commandEncoder.beginComputePass();
             passEncoder.setPipeline(pipeline);
             passEncoder.setBindGroup(0, bindGroup);
-            passEncoder.dispatchWorkgroups(numCombinations, 1, 1);
+            passEncoder.dispatchWorkgroups(dispatchX, dispatchY, 1);
             passEncoder.end();
 
             const readbackBuffer = device.createBuffer({ size: outputBufferSize, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
@@ -645,14 +802,15 @@ export class ChefAndRecipeThread {
     }
 
     async  computeWithWebGPU(
-        scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount
+        scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount, ownChefTopK = 3
     ) {
         //console.log("执行computeWithWebGPU")
         const device = await this.initWebGPU();
         try {
             // 创建输出缓冲区
             const maxIndex =  this.calI(recipeCount - 2, recipeCount - 2);
-            const outputSize = maxIndex * (3 + ownPresenceChefCount) * 4; // Int32Array 的字节大小
+            const queueDeep = ownChefTopK + ownPresenceChefCount;
+            const outputSize = maxIndex * queueDeep * 4; // Int32Array 的字节大小
 
             let totalByteCount = outputSize + outputSize;
             console.log("预估显存占用",totalByteCount / 1024.0 / 1024.0 / 1024.0)
@@ -739,7 +897,8 @@ fn calJ(i: i32, j: i32, N: i32) -> i32 {
                            let totalChefCount : i32 = ${totalChefCount};
                            let ownChefCount : i32= ${ownChefCount};
                            let ownPresenceChefCount : i32= ${ownPresenceChefCount};
-                             let queueDeep : i32 = ${(3 + ownPresenceChefCount)};
+                           let ownChefTopK : i32 = ${ownChefTopK};
+                             let queueDeep : i32 = ${(ownChefTopK + ownPresenceChefCount)};
                              
                     //let maxIndex: i32 = recipeCount * recipeCount * recipeCount;
                      let maxIndex: i32 = ${recipeCount * recipeCount * recipeCount};
@@ -761,13 +920,12 @@ fn calJ(i: i32, j: i32, N: i32) -> i32 {
                     }
                     
                     let index = getIndex(i,j,k,recipeCount) * queueDeep;
-                    
-                    var a: i32 = 0;
-                    var b: i32 = 0;
-                    var c: i32 = 0;
-                    var ai: i32 = 0;
-                    var bi: i32 = 0;
-                    var ci: i32 = 0;
+                    var bestScores: array<i32, ${ownChefTopK}>;
+                    var bestIndices: array<i32, ${ownChefTopK}>;
+                    for (var p: i32 = 0; p < ownChefTopK; p++) {
+                        bestScores[p] = 0;
+                        bestIndices[p] = 0;
+                    }
 
                     var tAdd: i32 = 0;
 
@@ -789,31 +947,25 @@ fn calJ(i: i32, j: i32, N: i32) -> i32 {
                         }
                         tAdd = end;
 
-                        if (maxNum > a) {
-                            c = b;
-                            ci = bi;
-                            b = a;
-                            bi = ai;
-                            a = maxNum;
-                            ai = maxT;
-                        } else if (maxNum > b) {
-                            c = b;
-                            ci = bi;
-                            b = maxNum;
-                            bi = maxT;
-                        } else if (maxNum > c) {
-                            c = maxNum;
-                            ci = maxT;
+                        if (maxNum > bestScores[ownChefTopK - 1]) {
+                            for (var p: i32 = 0; p < ownChefTopK; p++) {
+                                if (maxNum > bestScores[p]) {
+                                    for (var shift: i32 = ownChefTopK - 1; shift > p; shift--) {
+                                        bestScores[shift] = bestScores[shift - 1];
+                                        bestIndices[shift] = bestIndices[shift - 1];
+                                    }
+                                    bestScores[p] = maxNum;
+                                    bestIndices[p] = maxT;
+                                    break;
+                                }
+                            }
                         }
                     }
-          
-                    groupMaxScoreChefIndex[index] = ai;
-                    groupMaxScoreChefIndex[index + 1] = bi;
-                    groupMaxScoreChefIndex[index + 2] = ci;
 
-                    groupMaxScore[index] = a;
-                    groupMaxScore[index + 1] = b;
-                    groupMaxScore[index + 2] = c;
+                    for (var p: i32 = 0; p < ownChefTopK; p++) {
+                        groupMaxScoreChefIndex[index + p] = bestIndices[p];
+                        groupMaxScore[index + p] = bestScores[p];
+                    }
 
                     for (var r1: i32 = 0; r1 < ownPresenceChefCount; r1++) {
                         var r : i32= r1 + ownChefCount;
@@ -834,7 +986,7 @@ fn calJ(i: i32, j: i32, N: i32) -> i32 {
                         }
                         tAdd = end;
 
-                        let chefScoreIndex : i32 = index + 3 + r1;
+                        let chefScoreIndex : i32 = index + ownChefTopK + r1;
                         groupMaxScoreChefIndex[chefScoreIndex] = maxT;
                         groupMaxScore[chefScoreIndex] = maxNum;
                     }

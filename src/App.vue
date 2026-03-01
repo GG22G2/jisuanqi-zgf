@@ -182,12 +182,12 @@ export default {
     if (useAll) {
       calConfig = new CalConfig([1, 8, 8, 6, 6, 4, 4, 4, 6, 11], 160, 5, 0.92, true, useAll)
     } else {
-      calConfig = new CalConfig([1, 7, 6, 4, 3, 3, 3, 3, 5, 10], 120, 5, 0.92, false, false)
+      calConfig = new CalConfig([1, 7, 6, 4, 3, 3, 3, 3, 5, 10], 120, 5, 0.92, false, false,3,5)
     }
     if (isMobile) {
       calConfig = new CalConfig([1, 5, 4, 3, 3, 3, 3, 4, 5, 6], 100, 5, 0.96, false, false)
     }
-
+    console.log(calConfig)
     return {
       tabs: [
         { key: 'calculator', label: '计算器' },
