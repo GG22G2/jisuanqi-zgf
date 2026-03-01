@@ -250,6 +250,7 @@ class GodInference {
             let recipeId = r.recipeId;
             const reward = this.recipeReward[recipeId];
             r.rewardPrice = r.price * (1 + reward);
+            r.estimatedChefAdd = this.estimatedChefAdd(r);
         }
 
 
@@ -267,8 +268,10 @@ class GodInference {
         console.timeEnd("菜谱组合用时");
         console.log("实际组合数", this.playRecipeGroup.length)
         let maxScore = 0;
+        let maxEstimatedScore = 0;
 
         let totalScoreCache = new Int32Array(this.playRecipeGroup.length);
+        let estimatedScoreCache = new Int32Array(this.playRecipeGroup.length);
 
         for (let i = 0; i < this.playRecipeGroup.length; i++) {
             let temp = this.playRecipeGroup[i];
@@ -277,28 +280,40 @@ class GodInference {
                 break
             }
             let score = 0;
+            let estimatedScore = 0;
             for (let j = 0; j < 9; j++) {
                 let count = temp[j].count
                 let ownRecipe = temp[j].recipe
                 const reward = this.recipeReward[ownRecipe.recipeId];
                 //这里要考虑厨师做菜到传可以增加100%售价
                 score += ((ownRecipe.price * (1 + reward + 1) * count) | 0);
+                const estimatedChefAdd = ownRecipe.estimatedChefAdd == null ? 1 : ownRecipe.estimatedChefAdd;
+                estimatedScore += ((ownRecipe.price * (1 + reward + estimatedChefAdd) * count) | 0);
             }
             totalScoreCache[i] = score;
+            estimatedScoreCache[i] = estimatedScore;
             if (maxScore < score) {
                 maxScore = score;
             }
+            if (maxEstimatedScore < estimatedScore) {
+                maxEstimatedScore = estimatedScore;
+            }
         }
-        let chongfu = new Set();
         const filterScoreRate = this.filterScoreRate;
-        let newPlayRecipeGroup = [];
+        const scoreThreshold = maxScore * filterScoreRate;
+        const estimatedScoreThreshold = maxEstimatedScore * filterScoreRate;
+        const candidateMap = new Map();
+        let baseCount = 0;
         for (let i = 0; i < this.playRecipeGroup.length; i++) {
             let temp = this.playRecipeGroup[i];
             if (temp == null) {
                 continue
             }
             let score = totalScoreCache[i];
-            if (score < (maxScore * filterScoreRate)) {
+            let estimatedScore = estimatedScoreCache[i];
+            let basePass = score >= scoreThreshold;
+            let estimatedPass = estimatedScore >= estimatedScoreThreshold;
+            if (!basePass && !estimatedPass) {
                 continue;
             }
             temp.sort((r1, r2) => {
@@ -310,14 +325,50 @@ class GodInference {
                 let ownRecipe = temp[j].recipe
                 key = key + "-" + ownRecipe.recipeId + "-" + count
             }
-            if (chongfu.has(key)) {
-                continue;
+            let oldCandidate = candidateMap.get(key);
+            if (oldCandidate == null) {
+                if (basePass) {
+                    baseCount++;
+                }
+                candidateMap.set(key, {
+                    playRecipeGroup: temp,
+                    score,
+                    estimatedScore,
+                    basePass
+                });
+            } else {
+                if (basePass && !oldCandidate.basePass) {
+                    oldCandidate.basePass = true;
+                    baseCount++;
+                }
+                const oldCombined = oldCandidate.score + oldCandidate.estimatedScore;
+                const newCombined = score + estimatedScore;
+                if (newCombined > oldCombined) {
+                    oldCandidate.playRecipeGroup = temp;
+                }
+                if (score > oldCandidate.score) {
+                    oldCandidate.score = score;
+                }
+                if (estimatedScore > oldCandidate.estimatedScore) {
+                    oldCandidate.estimatedScore = estimatedScore;
+                }
             }
-            chongfu.add(key);
-            newPlayRecipeGroup.push(this.playRecipeGroup[i]);
         }
 
-        this.playRecipeGroup = newPlayRecipeGroup;
+        let candidates = Array.from(candidateMap.values());
+        if (baseCount <= 0 || candidates.length <= baseCount) {
+            this.playRecipeGroup = candidates.map((item) => item.playRecipeGroup);
+        } else {
+            const safeMaxScore = maxScore <= 0 ? 1 : maxScore;
+            const safeMaxEstimatedScore = maxEstimatedScore <= 0 ? 1 : maxEstimatedScore;
+            candidates.sort((a, b) => {
+                const aRank = Math.max(a.score / safeMaxScore, a.estimatedScore / safeMaxEstimatedScore);
+                const bRank = Math.max(b.score / safeMaxScore, b.estimatedScore / safeMaxEstimatedScore);
+                return bRank - aRank;
+            });
+            candidates.length = baseCount;
+            this.playRecipeGroup = candidates.map((item) => item.playRecipeGroup);
+        }
         console.timeEnd('排列菜谱')
         console.info("候选菜谱组合列表" + this.playRecipeGroup.length);
 
@@ -1158,7 +1209,6 @@ class CalConfig {
         this.useEquip = useEquip;//使用厨具  待实现
         this.useAll = useAll;//拥有全厨师全修炼，全菜谱全专精
         this.mustChefs = ['二郎神'] //不收recipeLimit影响，参与计算的厨师
-
     }
 
 }
