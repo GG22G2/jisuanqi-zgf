@@ -15,8 +15,10 @@ export class ChefAndRecipeThread {
         this.start = 0;
         this.groupMaxScore = null;
         this.groupMaxScoreChefIndex = null;
+        this.groupBestScore = null;
         this.chefRealIndex = null;
         this.recipeCount = 0;
+        this.ownChefTopK = 3;
 
     }
 
@@ -34,20 +36,22 @@ export class ChefAndRecipeThread {
                           chefEquipCount,
                           chefMasks,
                           chefMatchMasks,
-                          chefRealIndex
+                          chefRealIndex,
+                          ownChefTopK
                       }) {
         this.playRecipes = playRecipesArr;
         this.recipePL = recipePL
+        this.ownChefTopK = ownChefTopK == null ? 3 : Math.max(3, ownChefTopK | 0);
 
         let result = null;
         let isMobile = navigator.userAgent.match(/(phone|pad|pod|iPhone|iPod|ios|iPad|Android|Mobile|BlackBerry|IEMobile|MQQBrowser|JUC|Fennec|wOSBrowser|BrowserNG|WebOS|Symbian|Windows Phone)/i);
         console.time('计算每三道菜最高得分的厨师')
-        if (isMobile || !navigator.gpu) {
+        if (isMobile || !navigator.gpu || this.ownChefTopK !== 3) {
              result = this.calAllCache(scoreCache, recipeCount
-                 , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+                 , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount, this.ownChefTopK);
         }else {
              result = await this.computeWithWebGPU(scoreCache, recipeCount
-                , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount);
+                , playChefCount + playPresenceChefCount, ownChefCount, presenceChefCount, chefEquipCount, this.ownChefTopK);
         }
         console.timeEnd('计算每三道菜最高得分的厨师')
 
@@ -76,6 +80,19 @@ export class ChefAndRecipeThread {
         this.chefMasks = chefMasks;
         this.chefMatchMasks = chefMatchMasks;
         this.presenceChefCount = presenceChefCount;
+        const chefT = this.presenceChefCount + this.ownChefTopK;
+        const groupCount = (this.groupMaxScore.length / chefT) | 0;
+        this.groupBestScore = new Int32Array(groupCount);
+        for (let g = 0, base = 0; g < groupCount; g++, base += chefT) {
+            let best = 0;
+            for (let c = 0; c < chefT; c++) {
+                const score = this.groupMaxScore[base + c];
+                if (score > best) {
+                    best = score;
+                }
+            }
+            this.groupBestScore[g] = best;
+        }
         //console.log(calAllCache1)
 
     }
@@ -87,9 +104,9 @@ export class ChefAndRecipeThread {
     call(start, limit) {
         let startTime = Date.now(), endTime = 0;
 
-        let maxScore = 0, maxKey = 0;
+        let maxScore = 0;
         let score1Index, score2Index, score3Index;
-        let maxScoreChefGroup = new Array(3), maxI, maxK;
+        let maxScoreChefGroup = new Array(3);
         let chefMasks = this.chefMasks;
         let chefMatchMasks = this.chefMatchMasks;
 
@@ -101,6 +118,9 @@ export class ChefAndRecipeThread {
 
         const recipeCount = this.recipeCount;
         let chefRealIndex = this.chefRealIndex;
+        const groupBestScore = this.groupBestScore;
+        const groupMaxScore = this.groupMaxScore;
+        const groupMaxScoreChefIndex = this.groupMaxScoreChefIndex;
 
         const temp = this.playRecipes;
 
@@ -116,18 +136,21 @@ export class ChefAndRecipeThread {
             }
         }
 
-        const chefT = this.presenceChefCount + 3;
+        const chefT = this.presenceChefCount + this.ownChefTopK;
         //这一部分应该也可以交给gpu计算
         //可以保存结果每组菜谱的最大分，最后在cpu中计算最大分
         for (let t = 0; t < playRecipes.length; t += 9) {
             //这里等于是根据三个菜谱的id 判断出来三个菜组合得分的索引位置
-            score1Index = this.getIndex(playRecipes[t + 0],playRecipes[t + 1],playRecipes[t + 2],recipeCount);
-            score2Index = this.getIndex(playRecipes[t + 3],playRecipes[t + 4],playRecipes[t + 5],recipeCount);
-            score3Index = this.getIndex(playRecipes[t + 6],playRecipes[t + 7],playRecipes[t + 8],recipeCount);
+            const g1 = this.getIndex(playRecipes[t + 0],playRecipes[t + 1],playRecipes[t + 2],recipeCount);
+            const g2 = this.getIndex(playRecipes[t + 3],playRecipes[t + 4],playRecipes[t + 5],recipeCount);
+            const g3 = this.getIndex(playRecipes[t + 6],playRecipes[t + 7],playRecipes[t + 8],recipeCount);
+            if (groupBestScore[g1] + groupBestScore[g2] + groupBestScore[g3] <= maxScore) {
+                continue;
+            }
 
-            score1Index = score1Index * chefT;
-            score2Index = score2Index * chefT;
-            score3Index = score3Index * chefT;
+            score1Index = g1 * chefT;
+            score2Index = g2 * chefT;
+            score3Index = g3 * chefT;
 
             //给每个厨师生成一个条件码，这里判断如果符合条件，则进入光环技能判断流程。
             //比如刘昂星如果有 兰飞鸿的技能，则兰飞鸿必须在场，特殊技能的厨师生成一个特殊的标识，这里做一次匹配
@@ -135,14 +158,30 @@ export class ChefAndRecipeThread {
             //有某个厨师重复出现，则便利所有可能
 
             for (let c1 = 0; c1 < chefT; c1++) {
+                const s1 = groupMaxScore[score1Index + c1];
+                if (s1 === 0 || s1 + groupBestScore[g2] + groupBestScore[g3] <= maxScore) {
+                    continue;
+                }
                 for (let c2 = 0; c2 < chefT; c2++) {
+                    const s2 = groupMaxScore[score2Index + c2];
+                    if (s2 === 0) {
+                        continue;
+                    }
+                    const s12 = s1 + s2;
+                    if (s12 + groupBestScore[g3] <= maxScore) {
+                        continue;
+                    }
                     for (let c3 = 0; c3 < chefT; c3++) {
-                        let score = this.groupMaxScore[score1Index + c1] + this.groupMaxScore[score2Index + c2] + this.groupMaxScore[score3Index + c3];
+                        const s3 = groupMaxScore[score3Index + c3];
+                        if (s3 === 0) {
+                            continue;
+                        }
+                        let score = s12 + s3;
                         if (score > maxScore) {
                             //如果最大分数冲突，则遍历所有确定最大分
-                            let chef1 = this.groupMaxScoreChefIndex[score1Index + c1]
-                            let chef2 = this.groupMaxScoreChefIndex[score2Index + c2]
-                            let chef3 = this.groupMaxScoreChefIndex[score3Index + c3]
+                            let chef1 = groupMaxScoreChefIndex[score1Index + c1]
+                            let chef2 = groupMaxScoreChefIndex[score2Index + c2]
+                            let chef3 = groupMaxScoreChefIndex[score3Index + c3]
 
                             let realChef1 = chefRealIndex[chef1];
                             let realChef2 = chefRealIndex[chef2];
@@ -174,7 +213,7 @@ export class ChefAndRecipeThread {
                                 result.maxScore = maxScore;
                                 result.maxScoreChefGroup = [chef1, chef2, chef3];
                                 result.recipes = playRecipes.slice(t, t + 9);
-                                result.scores = [this.groupMaxScore[score1Index + c1],this.groupMaxScore[score2Index + c2],this.groupMaxScore[score3Index + c3]];
+                                result.scores = [s1, s2, s3];
                             }
                         }
                     }
@@ -419,92 +458,166 @@ export class ChefAndRecipeThread {
         }
     }
 
-    calAllCache(scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount) {
+    calAllCache(scoreCache, recipeCount, totalChefCount, ownChefCount, ownPresenceChefCount, chefEquipCount, ownChefTopK = 3) {
         let maxIndex = this.calI(recipeCount - 2, recipeCount - 2);
         console.log(maxIndex,recipeCount*recipeCount*recipeCount)
-        const groupMaxScore = new Int32Array(maxIndex * (3 + ownPresenceChefCount));
-        const groupMaxScoreChefIndex = new Int32Array(maxIndex * (3 + ownPresenceChefCount))
+        const queueDeep = ownChefTopK + ownPresenceChefCount;
+        const groupMaxScore = new Int32Array(maxIndex * queueDeep);
+        const groupMaxScoreChefIndex = new Int32Array(maxIndex * queueDeep)
 
         console.time("计算每三道菜最高得分的厨师")
 
         let index = 0;
-        const r2 = recipeCount * recipeCount;
-        for (let i = 0; i < recipeCount; i++) {
-            for (let j = i + 1; j < recipeCount; j++) {
-                for (let k = j + 1; k < recipeCount; k++) {
-                    index = this.getIndex(i,j,k,recipeCount);
-                    index = index * (3 + ownPresenceChefCount);
-                    //每一组菜谱组合，计算得分最高的3个厨师
-                    let a = 0, b = 0, c = 0, ai = 0, bi = 0, ci = 0;
-                    let tAdd = 0;
+        if (ownChefTopK === 3) {
+            for (let i = 0; i < recipeCount; i++) {
+                for (let j = i + 1; j < recipeCount; j++) {
+                    for (let k = j + 1; k < recipeCount; k++) {
+                        index = this.getIndex(i,j,k,recipeCount);
+                        index = index * queueDeep;
+                        //每一组菜谱组合，计算得分最高的3个厨师
+                        let a = 0, b = 0, c = 0, ai = 0, bi = 0, ci = 0;
+                        let tAdd = 0;
 
-                    for (let r = 0; r < ownChefCount; r++) {
-                        let equipCount = chefEquipCount[r];
-                        let start = tAdd, end = tAdd + equipCount + 1;
-                        let maxNum = 0;
-                        let maxT = 0;
-                        //计算同一个厨师带不同的厨具时候，做这三个菜谱的最大分
-                        for (let t = start; t < end; t++) {
-                            if (!(scoreCache[t * recipeCount + i] === 0 || scoreCache[t * recipeCount + j] === 0 || scoreCache[t * recipeCount + k] === 0)) {
-                                const num = scoreCache[t * recipeCount + i] + scoreCache[t * recipeCount + j] + scoreCache[t * recipeCount + k];
-                                if (num > maxNum) {
-                                    maxNum = num;
-                                    maxT = t;
+                        for (let r = 0; r < ownChefCount; r++) {
+                            let equipCount = chefEquipCount[r];
+                            let start = tAdd, end = tAdd + equipCount + 1;
+                            let maxNum = 0;
+                            let maxT = 0;
+                            //计算同一个厨师带不同的厨具时候，做这三个菜谱的最大分
+                            for (let t = start; t < end; t++) {
+                                if (!(scoreCache[t * recipeCount + i] === 0 || scoreCache[t * recipeCount + j] === 0 || scoreCache[t * recipeCount + k] === 0)) {
+                                    const num = scoreCache[t * recipeCount + i] + scoreCache[t * recipeCount + j] + scoreCache[t * recipeCount + k];
+                                    if (num > maxNum) {
+                                        maxNum = num;
+                                        maxT = t;
+                                    }
                                 }
                             }
-                        }
-                        tAdd = end;
+                            tAdd = end;
 
-                        if (maxNum > a) {
-                            c = b;
-                            ci = bi;
-                            b = a;
-                            bi = ai;
-                            a = maxNum;
-                            ai = maxT;
-                        } else if (maxNum > b) {
-                            c = b;
-                            ci = bi;
-                            b = maxNum;
-                            bi = maxT;
-                        } else if (maxNum > c) {
-                            c = maxNum;
-                            ci = maxT;
-                        }
-                    }
-                    groupMaxScoreChefIndex[index] = ai;
-                    groupMaxScoreChefIndex[index + 1] = bi;
-                    groupMaxScoreChefIndex[index + 2] = ci;
-
-                    groupMaxScore[index] = a
-                    groupMaxScore[index + 1] = b
-                    groupMaxScore[index + 2] = c
-
-                    //遍历在场生效厨师 ，生产对应结果
-                    for (let r1 = 0; r1 < ownPresenceChefCount; r1++) {
-                        let r = r1 + ownChefCount;
-                        let equipCount = chefEquipCount[r];
-                        let start = tAdd, end = tAdd + equipCount + 1;
-                        let maxNum = 0;
-                        let maxT = 0;
-                        //计算同一个厨师带不同的厨具时候，做这三个菜谱的最大分
-                        for (let t = start; t < end; t++) {
-                            if (!(scoreCache[t * recipeCount + i] === 0 || scoreCache[t * recipeCount + j] === 0 || scoreCache[t * recipeCount + k] === 0)) {
-                                const num = scoreCache[t * recipeCount + i] + scoreCache[t * recipeCount + j] + scoreCache[t * recipeCount + k];
-                                if (num > maxNum) {
-                                    maxNum = num;
-                                    maxT = t;
-                                }
+                            if (maxNum > a) {
+                                c = b;
+                                ci = bi;
+                                b = a;
+                                bi = ai;
+                                a = maxNum;
+                                ai = maxT;
+                            } else if (maxNum > b) {
+                                c = b;
+                                ci = bi;
+                                b = maxNum;
+                                bi = maxT;
+                            } else if (maxNum > c) {
+                                c = maxNum;
+                                ci = maxT;
                             }
                         }
-                        tAdd = end;
-                        let chefScoreIndex = index + 3 + r1;
-                        groupMaxScoreChefIndex[chefScoreIndex] = maxT;
-                        groupMaxScore[chefScoreIndex] = maxNum
+                        groupMaxScoreChefIndex[index] = ai;
+                        groupMaxScoreChefIndex[index + 1] = bi;
+                        groupMaxScoreChefIndex[index + 2] = ci;
+
+                        groupMaxScore[index] = a
+                        groupMaxScore[index + 1] = b
+                        groupMaxScore[index + 2] = c
+
+                        //遍历在场生效厨师 ，生产对应结果
+                        for (let r1 = 0; r1 < ownPresenceChefCount; r1++) {
+                            let r = r1 + ownChefCount;
+                            let equipCount = chefEquipCount[r];
+                            let start = tAdd, end = tAdd + equipCount + 1;
+                            let maxNum = 0;
+                            let maxT = 0;
+                            //计算同一个厨师带不同的厨具时候，做这三个菜谱的最大分
+                            for (let t = start; t < end; t++) {
+                                if (!(scoreCache[t * recipeCount + i] === 0 || scoreCache[t * recipeCount + j] === 0 || scoreCache[t * recipeCount + k] === 0)) {
+                                    const num = scoreCache[t * recipeCount + i] + scoreCache[t * recipeCount + j] + scoreCache[t * recipeCount + k];
+                                    if (num > maxNum) {
+                                        maxNum = num;
+                                        maxT = t;
+                                    }
+                                }
+                            }
+                            tAdd = end;
+                            let chefScoreIndex = index + ownChefTopK + r1;
+                            groupMaxScoreChefIndex[chefScoreIndex] = maxT;
+                            groupMaxScore[chefScoreIndex] = maxNum
+                        }
                     }
                 }
+                postMessage({type: 'p', p: index / (maxIndex * queueDeep)})
             }
-            postMessage({type: 'p', p: index / (maxIndex * (3 + ownPresenceChefCount))})
+        } else {
+            const bestScores = new Int32Array(ownChefTopK);
+            const bestIndices = new Int32Array(ownChefTopK);
+            for (let i = 0; i < recipeCount; i++) {
+                for (let j = i + 1; j < recipeCount; j++) {
+                    for (let k = j + 1; k < recipeCount; k++) {
+                        index = this.getIndex(i,j,k,recipeCount);
+                        index = index * queueDeep;
+                        bestScores.fill(0);
+                        bestIndices.fill(0);
+                        let tAdd = 0;
+
+                        for (let r = 0; r < ownChefCount; r++) {
+                            let equipCount = chefEquipCount[r];
+                            let start = tAdd, end = tAdd + equipCount + 1;
+                            let maxNum = 0;
+                            let maxT = 0;
+                            for (let t = start; t < end; t++) {
+                                if (!(scoreCache[t * recipeCount + i] === 0 || scoreCache[t * recipeCount + j] === 0 || scoreCache[t * recipeCount + k] === 0)) {
+                                    const num = scoreCache[t * recipeCount + i] + scoreCache[t * recipeCount + j] + scoreCache[t * recipeCount + k];
+                                    if (num > maxNum) {
+                                        maxNum = num;
+                                        maxT = t;
+                                    }
+                                }
+                            }
+                            tAdd = end;
+
+                            if (maxNum > bestScores[ownChefTopK - 1]) {
+                                for (let p = 0; p < ownChefTopK; p++) {
+                                    if (maxNum > bestScores[p]) {
+                                        for (let shift = ownChefTopK - 1; shift > p; shift--) {
+                                            bestScores[shift] = bestScores[shift - 1];
+                                            bestIndices[shift] = bestIndices[shift - 1];
+                                        }
+                                        bestScores[p] = maxNum;
+                                        bestIndices[p] = maxT;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        for (let p = 0; p < ownChefTopK; p++) {
+                            groupMaxScore[index + p] = bestScores[p];
+                            groupMaxScoreChefIndex[index + p] = bestIndices[p];
+                        }
+
+                        for (let r1 = 0; r1 < ownPresenceChefCount; r1++) {
+                            let r = r1 + ownChefCount;
+                            let equipCount = chefEquipCount[r];
+                            let start = tAdd, end = tAdd + equipCount + 1;
+                            let maxNum = 0;
+                            let maxT = 0;
+                            for (let t = start; t < end; t++) {
+                                if (!(scoreCache[t * recipeCount + i] === 0 || scoreCache[t * recipeCount + j] === 0 || scoreCache[t * recipeCount + k] === 0)) {
+                                    const num = scoreCache[t * recipeCount + i] + scoreCache[t * recipeCount + j] + scoreCache[t * recipeCount + k];
+                                    if (num > maxNum) {
+                                        maxNum = num;
+                                        maxT = t;
+                                    }
+                                }
+                            }
+                            tAdd = end;
+                            let chefScoreIndex = index + ownChefTopK + r1;
+                            groupMaxScoreChefIndex[chefScoreIndex] = maxT;
+                            groupMaxScore[chefScoreIndex] = maxNum
+                        }
+                    }
+                }
+                postMessage({type: 'p', p: index / (maxIndex * queueDeep)})
+            }
         }
 
         console.timeEnd("计算每三道菜最高得分的厨师")

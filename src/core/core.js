@@ -22,6 +22,7 @@ import {ChefAndRecipeThread} from "./worker.js"
 class GodInference {
     constructor(officialGameData, myGameData, recipeReward, sexReward, materials, calConfig) {
         this.useEquip = false;
+        this.ownChefTopK = 3;
 
         if (calConfig != null) {
             this.chefMinRarity = calConfig.chefMinRarity;
@@ -30,6 +31,7 @@ class GodInference {
             this.filterScoreRate = calConfig.filterScoreRate;
             this.useEquip = calConfig.useEquip;
             this.mustChefs = calConfig.mustChefs;
+            this.ownChefTopK = calConfig.ownChefTopK == null ? 3 : calConfig.ownChefTopK;
         }
 
         //拥有的厨师，菜谱，厨具
@@ -147,7 +149,8 @@ class GodInference {
             chefEquipCount: this.tempCalCache.chefEquipCount,
             chefMasks: this.tempCalCache.chefMasks,
             chefMatchMasks: this.tempCalCache.chefMatchMasks,
-            chefRealIndex: chefRealIndex
+            chefRealIndex: chefRealIndex,
+            ownChefTopK: this.ownChefTopK
         }
 
         return new Promise(async resolve => {
@@ -250,7 +253,12 @@ class GodInference {
             let recipeId = r.recipeId;
             const reward = this.recipeReward[recipeId];
             r.rewardPrice = r.price * (1 + reward);
-            r.estimatedChefAdd = this.estimatedChefAdd(r);
+            let estimatedChefAdd = this.estimatedChefAdd(r);
+            if (!Number.isFinite(estimatedChefAdd) || estimatedChefAdd < 0) {
+                estimatedChefAdd = 0;
+            }
+            r.estimatedChefAdd = estimatedChefAdd;
+            r.estimatedRewardPrice = r.price * (1 + reward + estimatedChefAdd);
         }
 
 
@@ -677,7 +685,8 @@ class GodInference {
             if (ignoreRecipeId[id] !== 0) {
                 continue
             }
-            let computedPrice = BigInt((ownRecipe.rewardPrice * count) | 0);
+            const estimatedRewardPrice = ownRecipe.estimatedRewardPrice ? ownRecipe.estimatedRewardPrice : ownRecipe.rewardPrice;
+            let computedPrice = BigInt((estimatedRewardPrice * count) | 0);
             priceAscResult.insert(computedPrice << 32n | BigInt(ownRecipe.pIndex))
         }
     }
@@ -737,8 +746,8 @@ class GodInference {
             if (ignoreRecipeId[id] !== 0) {
                 continue
             }
-            const reward = this.recipeReward[recipeId];
-            let computedPrice = BigInt((ownRecipe.price * (1 + reward) * quantity[id]) | 0);
+            const estimatedRewardPrice = ownRecipe.estimatedRewardPrice ? ownRecipe.estimatedRewardPrice : (ownRecipe.price * (1 + this.recipeReward[recipeId]));
+            let computedPrice = BigInt((estimatedRewardPrice * quantity[id]) | 0);
             if (computedPrice === 0n) {
                 continue
             }
@@ -1199,7 +1208,7 @@ class CalConfig {
     /**
      * 计算配置，暂时只有加法额外追加的值
      * */
-    constructor(deepLimit, recipeLimit, chefMinRarity, filterScoreRate, useEquip, useAll, mustChefs) {
+    constructor(deepLimit, recipeLimit, chefMinRarity, filterScoreRate, useEquip, useAll, mustChefs, ownChefTopK) {
 
         this.deepLimit = deepLimit;   //生成菜谱时候的遍历深度
         this.recipeLimit = recipeLimit;//菜谱限制，根据厨神规则排序菜谱，只是用前recipeLimit个菜
@@ -1209,6 +1218,7 @@ class CalConfig {
         this.useEquip = useEquip;//使用厨具  待实现
         this.useAll = useAll;//拥有全厨师全修炼，全菜谱全专精
         this.mustChefs = ['二郎神'] //不收recipeLimit影响，参与计算的厨师
+        this.ownChefTopK = ownChefTopK == null ? 3 : Math.max(3, ownChefTopK | 0);
     }
 
 }
