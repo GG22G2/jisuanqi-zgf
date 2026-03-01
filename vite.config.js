@@ -6,24 +6,27 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { visualizer } from "rollup-plugin-visualizer";
 
 // https://vitejs.dev/config/
-export default defineConfig({
-    base:'/jisuanqi-zgf',
-    server:{
-        host: '0.0.0.0',
-    },
-  plugins: [
-          vue(),
-      AutoImport({
-          resolvers: [ElementPlusResolver()],
-      }),
-      Components({
-          resolvers: [ElementPlusResolver()],
-      }),
-      visualizer({
-          open:true //如果存在本地服务端口，将在打包后自动展示
-      })
-  ],
-    build:{
+export default defineConfig(({ mode }) => {
+    const isAnalyze = mode === 'analyze'
 
+    return {
+        base: '/jisuanqi-zgf/',
+        server: {
+            host: '0.0.0.0',
+        },
+        plugins: [
+            vue(),
+            AutoImport({
+                resolvers: [ElementPlusResolver()],
+            }),
+            Components({
+                resolvers: [ElementPlusResolver()],
+            }),
+            isAnalyze &&
+                visualizer({
+                    open: true, // 如果存在本地服务端口，将在打包后自动展示
+                }),
+        ].filter(Boolean),
+        build: {},
     }
 })
