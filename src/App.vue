@@ -1,26 +1,22 @@
 <template>
   <div class="app-shell">
-    <div class="tab-header">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        type="button"
-        class="tab-button"
-        :class="{ active: activeTab === tab.key }"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <TabGroup :selected-index="selectedTabIndex" @change="onTabChange">
+      <TabList class="tab-header">
+        <Tab v-for="tab in tabs" :key="tab.key" as="template" v-slot="{ selected }">
+          <button type="button" class="tab-button" :class="{ active: selected }">
+            {{ tab.label }}
+          </button>
+        </Tab>
+      </TabList>
 
-    <div class="tab-content-wrap">
-      <section v-show="activeTab === 'calculator'" class="tab-panel">
-        <div class="panel-card">
+      <TabPanels class="tab-content-wrap">
+        <TabPanel class="tab-panel">
+        <div class="panel-card form-card">
           <div v-if="!simpleCal" class="form-row">
             <label class="form-label">使用厨具(3星)</label>
-            <label class="switch">
-              <input v-model="calConfig.useEquip" type="checkbox" />
-              <span class="switch-slider"></span>
+            <label class="switch" aria-label="使用厨具(3星)">
+              <input v-model="calConfig.useEquip" type="checkbox" class="switch-input" />
+              <span class="switch-track"></span>
             </label>
           </div>
 
@@ -98,10 +94,10 @@
             </div>
           </div>
         </div>
-      </section>
+        </TabPanel>
 
-      <section v-show="activeTab === 'data'" class="tab-panel">
-        <div class="panel-card">
+        <TabPanel class="tab-panel">
+        <div class="panel-card form-card">
           <div class="form-row">
             <button type="button" class="btn-primary" @click="reloadGameData">加载游戏数据</button>
           </div>
@@ -125,9 +121,9 @@
             </button>
           </div>
         </div>
-      </section>
+        </TabPanel>
 
-      <section v-show="activeTab === 'desc'" class="tab-panel desc-panel">
+        <TabPanel class="tab-panel desc-panel">
         <div class="panel-card">
           <p>奖励倍数取自白采菊花</p>
           <p>游戏数据取自图鉴网</p>
@@ -141,8 +137,9 @@
           </p>
           <p>[厨师技能效果提升50%]还没实现</p>
         </div>
-      </section>
-    </div>
+        </TabPanel>
+      </TabPanels>
+    </TabGroup>
   </div>
 
   <div class="toast-stack">
@@ -159,11 +156,19 @@
 </template>
 
 <script>
+import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '@headlessui/vue'
 import { CalConfig } from './core/core.js'
 import { parseData, Task } from './core/task.js'
 import { markRaw, toRaw } from 'vue'
 
 export default {
+  components: {
+    TabGroup,
+    TabList,
+    Tab,
+    TabPanels,
+    TabPanel,
+  },
   data() {
     // 获取URL参数
     // http://localhost:5173/jisuanqi-zgf?useAll=true
@@ -204,6 +209,12 @@ export default {
       topScore: null,
     }
   },
+  computed: {
+    selectedTabIndex() {
+      const index = this.tabs.findIndex((tab) => tab.key === this.activeTab)
+      return index >= 0 ? index : 0
+    },
+  },
   async created() {
     this.init()
     window.onmessage = (event) => {
@@ -214,6 +225,12 @@ export default {
     window.onmessage = null
   },
   methods: {
+    onTabChange(index) {
+      const tab = this.tabs[index]
+      if (tab) {
+        this.activeTab = tab.key
+      }
+    },
     isMobile() {
       return navigator.userAgent.match(
         /(phone|pad|pod|iPhone|iPod|ios|iPad|Android|Mobile|BlackBerry|IEMobile|MQQBrowser|JUC|Fennec|wOSBrowser|BrowserNG|WebOS|Symbian|Windows Phone)/i,
@@ -445,6 +462,10 @@ export default {
   background: #fff;
 }
 
+.form-card {
+  max-width: 760px;
+}
+
 .form-row {
   display: flex;
   flex-wrap: wrap;
@@ -488,74 +509,93 @@ export default {
 
 .switch {
   position: relative;
-  width: 40px;
-  height: 20px;
+  width: 42px;
+  height: 24px;
   display: inline-block;
+  cursor: pointer;
 }
 
-.switch input {
+.switch-input {
   opacity: 0;
   width: 0;
   height: 0;
-}
-
-.switch-slider {
   position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background-color: #d1d5db;
-  border-radius: 10px;
-  transition: background-color 0.2s;
 }
 
-.switch-slider::before {
+.switch-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1px solid #cfd4dc;
+  background: #e5e7eb;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.switch-track::after {
   content: "";
   position: absolute;
-  height: 16px;
-  width: 16px;
-  left: 2px;
   top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease;
 }
 
-.switch input:checked + .switch-slider {
-  background-color: #111827;
+.switch-input:checked + .switch-track {
+  background: #6b7280;
+  border-color: #6b7280;
 }
 
-.switch input:checked + .switch-slider::before {
-  transform: translateX(20px);
+.switch-input:checked + .switch-track::after {
+  transform: translateX(18px);
+}
+
+.switch-input:focus-visible + .switch-track {
+  outline: 2px solid #9ca3af;
+  outline-offset: 2px;
 }
 
 .btn-primary {
-  border: 1px solid #111827;
-  background: #111827;
-  color: #fff;
+  border: 1px solid #6b7280;
+  background: #f8fafc;
+  color: #111827;
   border-radius: 4px;
   height: 32px;
   padding: 0 18px;
   cursor: pointer;
   font-size: 14px;
-  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  font-weight: 500;
+  box-shadow: 0 0 0 0 rgba(17, 24, 39, 0);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s,
+    transform 0.05s;
 }
 
-.btn-primary:hover {
-  background: #fff;
+.btn-primary:not(:disabled):hover {
+  background: #e5ecf5;
   color: #111827;
-  border-color: #111827;
+  border-color: #1f2937;
+  box-shadow: inset 0 0 0 1px rgba(31, 41, 55, 0.24);
 }
 
-.btn-primary:active {
-  background: #0a0a0a;
-  color: #fff;
+.btn-primary:not(:disabled):active {
+  background: #ced9e8;
+  border-color: #1f2937;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  transform: translateY(1px);
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid #9ca3af;
+  outline-offset: 1px;
 }
 
 .btn-primary:disabled {
-  background: #9ca3af;
-  border-color: #9ca3af;
-  color: #fff;
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #9aa1ad;
   opacity: 1;
   cursor: not-allowed;
 }
@@ -691,6 +731,10 @@ export default {
 
   .panel-card {
     padding: 12px 10px;
+  }
+
+  .form-card {
+    max-width: 100%;
   }
 
   .form-label {
