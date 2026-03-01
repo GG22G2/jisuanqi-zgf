@@ -12,6 +12,15 @@
       <TabPanels class="tab-content-wrap">
         <TabPanel class="tab-panel">
         <div class="panel-card form-card">
+          <div class="form-row">
+            <label class="form-label">计算档位</label>
+            <select v-model="calPreset" class="control" @change="applyCalPreset(calPreset)">
+              <option v-for="item in presetOptions" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </option>
+            </select>
+          </div>
+
           <div v-if="!simpleCal" class="form-row">
             <label class="form-label">使用厨具(3星)</label>
             <label class="switch" aria-label="使用厨具(3星)">
@@ -174,19 +183,74 @@ export default {
     // http://localhost:5173/jisuanqi-zgf?useAll=true
     const urlParams = new URLSearchParams(window.location.search)
     const useAll = urlParams.get('useAll') === 'true'
-    let calConfig = null
 
     // 没有进度条机制，所以手机端计算简单一点
     const isMobile = this.isMobile()
 
-    if (useAll) {
-      calConfig = new CalConfig([1, 8, 8, 6, 6, 4, 4, 4, 6, 11], 160, 5, 0.92, true, useAll)
-    } else {
-      calConfig = new CalConfig([1, 7, 6, 4, 3, 3, 3, 3, 5, 10], 120, 5, 0.92, false, false,3,5)
+    const presetOptions = [
+      { label: '稳健(更快)', value: 'stable' },
+      { label: '均衡(推荐)', value: 'balanced' },
+      { label: '激进(更高分概率)', value: 'aggressive' },
+    ]
+    const presetConfigs = {
+      stable: {
+        deepLimit: [1, 5, 4, 3, 3, 3, 3, 4, 5, 6],
+        recipeLimit: isMobile ? 90 : 100,
+        filterScoreRate: 0.96,
+        ownChefTopK: 4,
+        baseOwnChefTopK: 3,
+        recipePerturbRuns: 2,
+        recipeCandidateExpandRate: 1.15,
+        recipeCandidateExpandMax: 30,
+        estimatedCandidateKeepRate: 1.05,
+        maxEstimatedCandidateExtra: 300,
+        useEquip: false,
+      },
+      balanced: {
+        deepLimit: [1, 7, 6, 4, 3, 3, 3, 3, 5, 10],
+        recipeLimit: 120,
+        filterScoreRate: 0.92,
+        ownChefTopK: 5,
+        baseOwnChefTopK: 3,
+        recipePerturbRuns: 4,
+        recipeCandidateExpandRate: 1.35,
+        recipeCandidateExpandMax: 60,
+        estimatedCandidateKeepRate: 1.12,
+        maxEstimatedCandidateExtra: 800,
+        useEquip: false,
+      },
+      aggressive: {
+        deepLimit: [1, 8, 8, 6, 6, 4, 4, 4, 6, 11],
+        recipeLimit: 170,
+        filterScoreRate: 0.88,
+        ownChefTopK: 7,
+        baseOwnChefTopK: 3,
+        recipePerturbRuns: 6,
+        recipeCandidateExpandRate: 1.55,
+        recipeCandidateExpandMax: 100,
+        estimatedCandidateKeepRate: 1.2,
+        maxEstimatedCandidateExtra: 1400,
+        useEquip: true,
+      },
     }
-    if (isMobile) {
-      calConfig = new CalConfig([1, 5, 4, 3, 3, 3, 3, 4, 5, 6], 100, 5, 0.96, false, false)
+    const defaultPreset = isMobile ? 'stable' : useAll ? 'aggressive' : 'balanced'
+    const calConfig = new CalConfig([1, 7, 6, 4, 3, 3, 3, 3, 5, 10], 120, 5, 0.92, false, useAll)
+    const applyPresetConfig = (config, presetKey) => {
+      const preset = presetConfigs[presetKey] || presetConfigs.balanced
+      config.deepLimit = preset.deepLimit.slice()
+      config.recipeLimit = preset.recipeLimit
+      config.filterScoreRate = preset.filterScoreRate
+      config.ownChefTopK = preset.ownChefTopK
+      config.baseOwnChefTopK = preset.baseOwnChefTopK
+      config.enableDynamicTopK = true
+      config.recipePerturbRuns = preset.recipePerturbRuns
+      config.recipeCandidateExpandRate = preset.recipeCandidateExpandRate
+      config.recipeCandidateExpandMax = preset.recipeCandidateExpandMax
+      config.estimatedCandidateKeepRate = preset.estimatedCandidateKeepRate
+      config.maxEstimatedCandidateExtra = preset.maxEstimatedCandidateExtra
+      config.useEquip = isMobile ? false : preset.useEquip
     }
+    applyPresetConfig(calConfig, defaultPreset)
     console.log(calConfig)
     return {
       tabs: [
@@ -198,6 +262,9 @@ export default {
       notifications: [],
       nextNotificationId: 1,
       simpleCal: isMobile,
+      calPreset: defaultPreset,
+      presetOptions,
+      presetConfigs,
       calConfig,
       percentage: 0,
       showPercentage: false,
@@ -235,6 +302,24 @@ export default {
       return navigator.userAgent.match(
         /(phone|pad|pod|iPhone|iPod|ios|iPad|Android|Mobile|BlackBerry|IEMobile|MQQBrowser|JUC|Fennec|wOSBrowser|BrowserNG|WebOS|Symbian|Windows Phone)/i,
       )
+    },
+    applyCalPreset(presetKey) {
+      const preset = this.presetConfigs[presetKey] || this.presetConfigs.balanced
+      if (!preset) {
+        return
+      }
+      this.calConfig.deepLimit = preset.deepLimit.slice()
+      this.calConfig.recipeLimit = preset.recipeLimit
+      this.calConfig.filterScoreRate = preset.filterScoreRate
+      this.calConfig.ownChefTopK = preset.ownChefTopK
+      this.calConfig.baseOwnChefTopK = preset.baseOwnChefTopK
+      this.calConfig.enableDynamicTopK = true
+      this.calConfig.recipePerturbRuns = preset.recipePerturbRuns
+      this.calConfig.recipeCandidateExpandRate = preset.recipeCandidateExpandRate
+      this.calConfig.recipeCandidateExpandMax = preset.recipeCandidateExpandMax
+      this.calConfig.estimatedCandidateKeepRate = preset.estimatedCandidateKeepRate
+      this.calConfig.maxEstimatedCandidateExtra = preset.maxEstimatedCandidateExtra
+      this.calConfig.useEquip = this.simpleCal ? false : preset.useEquip
     },
     async calculator() {
       this.topChefs.length = 0

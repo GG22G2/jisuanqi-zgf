@@ -27,6 +27,9 @@ class GodInference {
         this.enableDynamicTopK = false;
         this.estimatedCandidateKeepRate = 1.12;
         this.maxEstimatedCandidateExtra = 800;
+        this.recipePerturbRuns = 4;
+        this.recipeCandidateExpandRate = 1.35;
+        this.recipeCandidateExpandMax = 60;
 
         if (calConfig != null) {
             this.chefMinRarity = calConfig.chefMinRarity;
@@ -43,6 +46,15 @@ class GodInference {
             }
             if (calConfig.maxEstimatedCandidateExtra != null) {
                 this.maxEstimatedCandidateExtra = Math.max(0, calConfig.maxEstimatedCandidateExtra | 0);
+            }
+            if (calConfig.recipePerturbRuns != null) {
+                this.recipePerturbRuns = Math.max(1, calConfig.recipePerturbRuns | 0);
+            }
+            if (calConfig.recipeCandidateExpandRate != null) {
+                this.recipeCandidateExpandRate = Math.max(1, calConfig.recipeCandidateExpandRate);
+            }
+            if (calConfig.recipeCandidateExpandMax != null) {
+                this.recipeCandidateExpandMax = Math.max(0, calConfig.recipeCandidateExpandMax | 0);
             }
         }
 
@@ -287,8 +299,7 @@ class GodInference {
         const product = this.deepLimit.reduce((acc, num) => acc * num);
         console.log("预估组合数", product);
 
-        this.estimatedPriceAndSort(recipeCounts, this.tempOwnRecipes);
-        this.tempOwnRecipes = this.tempOwnRecipes.slice(0, Math.min(this.recipeLimit, this.tempOwnRecipes.length));
+        this.tempOwnRecipes = this.selectRecipeCandidatesWithPerturbation(recipeCounts, this.tempOwnRecipes);
 
         //tempOwnRecipes 中的id进行压缩
 
@@ -477,6 +488,129 @@ class GodInference {
         recipes.sort((r1, r2) => {
             return prices[r2.recipeId] - prices[r1.recipeId];
         });
+    }
+
+    selectRecipeCandidatesWithPerturbation(quantity, recipes) {
+        const baseLimit = Math.min(this.recipeLimit, recipes.length);
+        if (baseLimit <= 0) {
+            return [];
+        }
+
+        this.estimatedPriceAndSort(quantity, recipes);
+        if (recipes.length <= baseLimit || this.recipePerturbRuns <= 1) {
+            return recipes.slice(0, baseLimit);
+        }
+
+        const metrics = new Array(recipes.length);
+        const metricByRecipeId = new Map();
+        let maxTotal = 0;
+        let maxUnit = 0;
+        let maxCount = 0;
+        for (let i = 0; i < recipes.length; i++) {
+            let recipe = recipes[i];
+            const recipeId = recipe.recipeId;
+            const count = quantity[recipeId] | 0;
+            const reward = this.recipeReward[recipeId];
+            let estimatedChefAdd = recipe.estimatedChefAdd;
+            if (estimatedChefAdd == null) {
+                estimatedChefAdd = this.estimatedChefAdd(recipe);
+                recipe.estimatedChefAdd = estimatedChefAdd;
+            }
+            const unitScore = recipe.price * (1 + reward + estimatedChefAdd);
+            const totalScore = ((unitScore * count) | 0);
+            const metric = {
+                recipe,
+                totalScore,
+                unitScore,
+                count
+            };
+            metrics[i] = metric;
+            metricByRecipeId.set(recipeId, metric);
+            if (totalScore > maxTotal) {
+                maxTotal = totalScore;
+            }
+            if (unitScore > maxUnit) {
+                maxUnit = unitScore;
+            }
+            if (count > maxCount) {
+                maxCount = count;
+            }
+        }
+
+        const selectedMap = new Map();
+        for (let i = 0; i < baseLimit; i++) {
+            selectedMap.set(recipes[i].recipeId, recipes[i]);
+        }
+
+        const runs = Math.max(1, this.recipePerturbRuns | 0);
+        const safeMaxTotal = maxTotal <= 0 ? 1 : maxTotal;
+        const safeMaxUnit = maxUnit <= 0 ? 1 : maxUnit;
+        const safeMaxCount = maxCount <= 0 ? 1 : maxCount;
+        const perturbWeights = [
+            [0.82, 0.12, 0.06, 0.03],
+            [0.72, 0.08, 0.20, 0.04],
+            [0.66, 0.24, 0.10, 0.02],
+            [0.90, 0.02, 0.08, 0.05],
+            [0.74, 0.18, 0.08, 0.06]
+        ];
+
+        for (let run = 1; run < runs; run++) {
+            const weights = perturbWeights[(run - 1) % perturbWeights.length];
+            const wb = weights[0], wu = weights[1], wc = weights[2], wn = weights[3];
+            const ranked = metrics.slice();
+            ranked.sort((a, b) => {
+                const an = this.deterministicNoise(a.recipe.recipeId, run);
+                const bn = this.deterministicNoise(b.recipe.recipeId, run);
+                const as = wb * (a.totalScore / safeMaxTotal)
+                    + wu * (a.unitScore / safeMaxUnit)
+                    + wc * (a.count / safeMaxCount)
+                    + wn * an;
+                const bs = wb * (b.totalScore / safeMaxTotal)
+                    + wu * (b.unitScore / safeMaxUnit)
+                    + wc * (b.count / safeMaxCount)
+                    + wn * bn;
+                if (as === bs) {
+                    return b.totalScore - a.totalScore;
+                }
+                return bs - as;
+            });
+
+            const take = Math.min(baseLimit, ranked.length);
+            for (let i = 0; i < take; i++) {
+                selectedMap.set(ranked[i].recipe.recipeId, ranked[i].recipe);
+            }
+        }
+
+        let finalLimit = baseLimit;
+        if (selectedMap.size > baseLimit) {
+            let expandByRate = Math.ceil(baseLimit * this.recipeCandidateExpandRate);
+            finalLimit = Math.max(baseLimit, expandByRate);
+            finalLimit = Math.min(finalLimit, baseLimit + this.recipeCandidateExpandMax);
+            finalLimit = Math.min(finalLimit, selectedMap.size);
+        }
+
+        const selectedRecipes = Array.from(selectedMap.values());
+        selectedRecipes.sort((r1, r2) => {
+            const m1 = metricByRecipeId.get(r1.recipeId);
+            const m2 = metricByRecipeId.get(r2.recipeId);
+            const s1 = m1 == null ? 0 : m1.totalScore;
+            const s2 = m2 == null ? 0 : m2.totalScore;
+            return s2 - s1;
+        });
+        if (selectedRecipes.length > finalLimit) {
+            selectedRecipes.length = finalLimit;
+        }
+
+        console.info(`[候选菜谱扰动] 基础${baseLimit} 扩展到${selectedMap.size} 最终${selectedRecipes.length} run=${runs}`);
+        return selectedRecipes;
+    }
+
+    deterministicNoise(recipeId, run) {
+        let x = (Math.imul((recipeId + 1), 1103515245) + Math.imul((run + 1), 12345) + 0x9e3779b9) >>> 0;
+        x ^= x >>> 16;
+        x = Math.imul(x, 2246822519) >>> 0;
+        x ^= x >>> 13;
+        return x / 4294967295;
     }
 
     estimatedChefAdd(recipe) {
@@ -1328,6 +1462,9 @@ class CalConfig {
         this.enableDynamicTopK = true;
         this.estimatedCandidateKeepRate = 1.12; // 允许保留部分估分高但基础分未达阈值的组合
         this.maxEstimatedCandidateExtra = 800; // 控制额外候选上限，避免候选爆炸
+        this.recipePerturbRuns = 4; // 一阶段候选菜谱多次扰动探索次数
+        this.recipeCandidateExpandRate = 1.35; // 相比基础recipeLimit允许的扩容比例
+        this.recipeCandidateExpandMax = 60; // 扰动后最多增加的菜谱数量
     }
 
 }

@@ -164,219 +164,211 @@ export class ChefAndRecipeThread {
             return result;
         }
 
-       // let playRecipes = new Int32Array(temp.length * 1680);
-        let playRecipes = new Uint16Array(groupCount * 1680 * 9);
-        for (let i = 0; i < groupCount; i++) {
-            const srcGroupIndex = start + i;
-            const index = srcGroupIndex * 9;
-            for (let k = 0; k < 1680; k++) {
-                const ints = this.recipePL[k];
-                for (let j = 0; j < 9; j++) {
-                    playRecipes[i * 1680 * 9 + k * 9 + j] = temp[index + ints[j]]
-                }
-            }
-        }
-
         const chefT = this.presenceChefCount + this.ownChefTopK;
-        //这一部分应该也可以交给gpu计算
-        //可以保存结果每组菜谱的最大分，最后在cpu中计算最大分
-        for (let t = 0; t < playRecipes.length; t += 9) {
-            //这里等于是根据三个菜谱的id 判断出来三个菜组合得分的索引位置
-            const g1 = this.getIndex(playRecipes[t + 0],playRecipes[t + 1],playRecipes[t + 2],recipeCount);
-            const g2 = this.getIndex(playRecipes[t + 3],playRecipes[t + 4],playRecipes[t + 5],recipeCount);
-            const g3 = this.getIndex(playRecipes[t + 6],playRecipes[t + 7],playRecipes[t + 8],recipeCount);
-            const fullUpperBound = groupBestScore[g1] + groupBestScore[g2] + groupBestScore[g3];
-            if (fullUpperBound <= maxScore) {
-                continue;
+        const recipePL = this.recipePL;
+        const permutationCount = recipePL.length;
+        const bestRecipes = new Uint16Array(9);
+        const chunkSize = 64;
+
+        const isChefPairValid = (chef1, chef2, chef3) => {
+            let realChef1 = chefRealIndex[chef1];
+            let realChef2 = chefRealIndex[chef2];
+            let realChef3 = chefRealIndex[chef3];
+            if (realChef1 === realChef2 || realChef1 === realChef3 || realChef2 === realChef3) {
+                return false;
             }
 
-            const score1Index = g1 * chefT;
-            const score2Index = g2 * chefT;
-            const score3Index = g3 * chefT;
+            let mm1 = chefMatchMasks[chef1];
+            let mm2 = chefMatchMasks[chef2];
+            let mm3 = chefMatchMasks[chef3];
+            if ((mm1 | mm2 | mm3) === 0) {
+                return true;
+            }
 
-            //给每个厨师生成一个条件码，这里判断如果符合条件，则进入光环技能判断流程。
-            //比如刘昂星如果有 兰飞鸿的技能，则兰飞鸿必须在场，特殊技能的厨师生成一个特殊的标识，这里做一次匹配
+            let m1 = chefMasks[chef1];
+            let m2 = chefMasks[chef2];
+            let m3 = chefMasks[chef3];
+            let p1 = mm1 & (m2 | m3);
+            let p2 = mm2 & (m1 | m3);
+            let p3 = mm3 & (m1 | m2);
+            return p1 === mm1 && p2 === mm2 && p3 === mm3;
+        };
 
-            //有某个厨师重复出现，则便利所有可能
+        const assignBestRecipes = (r0, r1, r2, r3, r4, r5, r6, r7, r8) => {
+            bestRecipes[0] = r0;
+            bestRecipes[1] = r1;
+            bestRecipes[2] = r2;
+            bestRecipes[3] = r3;
+            bestRecipes[4] = r4;
+            bestRecipes[5] = r5;
+            bestRecipes[6] = r6;
+            bestRecipes[7] = r7;
+            bestRecipes[8] = r8;
+        };
 
-            if (useDynamicTopK) {
-                const baseUpperBound = groupBestScoreBase[g1] + groupBestScoreBase[g2] + groupBestScoreBase[g3];
-                if (baseUpperBound > maxScore) {
-                    for (let i1 = 0; i1 < baseCandidateSlots.length; i1++) {
-                        const c1 = baseCandidateSlots[i1];
-                        const s1 = groupMaxScore[score1Index + c1];
-                        if (s1 === 0 || s1 + groupBestScoreBase[g2] + groupBestScoreBase[g3] <= maxScore) {
-                            continue;
-                        }
-                        for (let i2 = 0; i2 < baseCandidateSlots.length; i2++) {
-                            const c2 = baseCandidateSlots[i2];
-                            const s2 = groupMaxScore[score2Index + c2];
-                            if (s2 === 0) {
-                                continue;
-                            }
-                            const s12 = s1 + s2;
-                            if (s12 + groupBestScoreBase[g3] <= maxScore) {
-                                continue;
-                            }
-                            for (let i3 = 0; i3 < baseCandidateSlots.length; i3++) {
-                                const c3 = baseCandidateSlots[i3];
-                                const s3 = groupMaxScore[score3Index + c3];
-                                if (s3 === 0) {
-                                    continue;
-                                }
-                                const score = s12 + s3;
-                                if (score <= maxScore) {
-                                    continue;
-                                }
-                                let chef1 = groupMaxScoreChefIndex[score1Index + c1];
-                                let chef2 = groupMaxScoreChefIndex[score2Index + c2];
-                                let chef3 = groupMaxScoreChefIndex[score3Index + c3];
+        for (let chunkStart = start; chunkStart < limit; chunkStart += chunkSize) {
+            const chunkEnd = Math.min(limit, chunkStart + chunkSize);
 
-                                let realChef1 = chefRealIndex[chef1];
-                                let realChef2 = chefRealIndex[chef2];
-                                let realChef3 = chefRealIndex[chef3];
-                                if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
-                                    let mm1 = chefMatchMasks[chef1];
-                                    let mm2 = chefMatchMasks[chef2];
-                                    let mm3 = chefMatchMasks[chef3];
-                                    if ((mm1 | mm2 | mm3) !== 0) {
-                                        let m1 = chefMasks[chef1];
-                                        let m2 = chefMasks[chef2];
-                                        let m3 = chefMasks[chef3];
-                                        let p1 = mm1 & (m2 | m3);
-                                        let p2 = mm2 & (m1 | m3);
-                                        let p3 = mm3 & (m1 | m2);
-                                        if (p1 !== mm1 || p2 !== mm2 || p3 !== mm3) {
-                                            continue;
-                                        }
-                                    }
+            for (let srcGroupIndex = chunkStart; srcGroupIndex < chunkEnd; srcGroupIndex++) {
+                const groupRecipeBase = srcGroupIndex * 9;
 
-                                    maxScore = score;
-                                    result.maxScore = maxScore;
-                                    result.maxScoreChefGroup = [chef1, chef2, chef3];
-                                    result.recipes = playRecipes.slice(t, t + 9);
-                                    result.scores = [s1, s2, s3];
-                                }
-                            }
-                        }
-                    }
-                }
-                if (fullUpperBound > maxScore && fullUpperBound > baseUpperBound) {
-                    for (let c1 = 0; c1 < chefT; c1++) {
-                        const s1 = groupMaxScore[score1Index + c1];
-                        if (s1 === 0 || s1 + groupBestScore[g2] + groupBestScore[g3] <= maxScore) {
-                            continue;
-                        }
-                        for (let c2 = 0; c2 < chefT; c2++) {
-                            const s2 = groupMaxScore[score2Index + c2];
-                            if (s2 === 0) {
-                                continue;
-                            }
-                            const s12 = s1 + s2;
-                            if (s12 + groupBestScore[g3] <= maxScore) {
-                                continue;
-                            }
-                            for (let c3 = 0; c3 < chefT; c3++) {
-                                const s3 = groupMaxScore[score3Index + c3];
-                                if (s3 === 0) {
-                                    continue;
-                                }
-                                const score = s12 + s3;
-                                if (score <= maxScore) {
-                                    continue;
-                                }
-                                let chef1 = groupMaxScoreChefIndex[score1Index + c1];
-                                let chef2 = groupMaxScoreChefIndex[score2Index + c2];
-                                let chef3 = groupMaxScoreChefIndex[score3Index + c3];
+                for (let k = 0; k < permutationCount; k++) {
+                    const ints = recipePL[k];
+                    const r0 = temp[groupRecipeBase + ints[0]];
+                    const r1 = temp[groupRecipeBase + ints[1]];
+                    const r2 = temp[groupRecipeBase + ints[2]];
+                    const r3 = temp[groupRecipeBase + ints[3]];
+                    const r4 = temp[groupRecipeBase + ints[4]];
+                    const r5 = temp[groupRecipeBase + ints[5]];
+                    const r6 = temp[groupRecipeBase + ints[6]];
+                    const r7 = temp[groupRecipeBase + ints[7]];
+                    const r8 = temp[groupRecipeBase + ints[8]];
 
-                                let realChef1 = chefRealIndex[chef1];
-                                let realChef2 = chefRealIndex[chef2];
-                                let realChef3 = chefRealIndex[chef3];
-                                if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
-                                    let mm1 = chefMatchMasks[chef1];
-                                    let mm2 = chefMatchMasks[chef2];
-                                    let mm3 = chefMatchMasks[chef3];
-                                    if ((mm1 | mm2 | mm3) !== 0) {
-                                        let m1 = chefMasks[chef1];
-                                        let m2 = chefMasks[chef2];
-                                        let m3 = chefMasks[chef3];
-                                        let p1 = mm1 & (m2 | m3);
-                                        let p2 = mm2 & (m1 | m3);
-                                        let p3 = mm3 & (m1 | m2);
-                                        if (p1 !== mm1 || p2 !== mm2 || p3 !== mm3) {
-                                            continue;
-                                        }
-                                    }
-
-                                    maxScore = score;
-                                    result.maxScore = maxScore;
-                                    result.maxScoreChefGroup = [chef1, chef2, chef3];
-                                    result.recipes = playRecipes.slice(t, t + 9);
-                                    result.scores = [s1, s2, s3];
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                for (let c1 = 0; c1 < chefT; c1++) {
-                    const s1 = groupMaxScore[score1Index + c1];
-                    if (s1 === 0 || s1 + groupBestScore[g2] + groupBestScore[g3] <= maxScore) {
+                    const g1 = this.getIndex(r0, r1, r2, recipeCount);
+                    const g2 = this.getIndex(r3, r4, r5, recipeCount);
+                    const g3 = this.getIndex(r6, r7, r8, recipeCount);
+                    const fullUpperBound = groupBestScore[g1] + groupBestScore[g2] + groupBestScore[g3];
+                    if (fullUpperBound <= maxScore) {
                         continue;
                     }
-                    for (let c2 = 0; c2 < chefT; c2++) {
-                        const s2 = groupMaxScore[score2Index + c2];
-                        if (s2 === 0) {
-                            continue;
-                        }
-                        const s12 = s1 + s2;
-                        if (s12 + groupBestScore[g3] <= maxScore) {
-                            continue;
-                        }
-                        for (let c3 = 0; c3 < chefT; c3++) {
-                            const s3 = groupMaxScore[score3Index + c3];
-                            if (s3 === 0) {
-                                continue;
-                            }
-                            const score = s12 + s3;
-                            if (score <= maxScore) {
-                                continue;
-                            }
-                            let chef1 = groupMaxScoreChefIndex[score1Index + c1];
-                            let chef2 = groupMaxScoreChefIndex[score2Index + c2];
-                            let chef3 = groupMaxScoreChefIndex[score3Index + c3];
 
-                            let realChef1 = chefRealIndex[chef1];
-                            let realChef2 = chefRealIndex[chef2];
-                            let realChef3 = chefRealIndex[chef3];
-                            if (realChef1 !== realChef2 && realChef1 !== realChef3 && realChef2 !== realChef3) {
-                                let mm1 = chefMatchMasks[chef1];
-                                let mm2 = chefMatchMasks[chef2];
-                                let mm3 = chefMatchMasks[chef3];
-                                if ((mm1 | mm2 | mm3) !== 0) {
-                                    let m1 = chefMasks[chef1];
-                                    let m2 = chefMasks[chef2];
-                                    let m3 = chefMasks[chef3];
-                                    let p1 = mm1 & (m2 | m3);
-                                    let p2 = mm2 & (m1 | m3);
-                                    let p3 = mm3 & (m1 | m2);
-                                    if (p1 !== mm1 || p2 !== mm2 || p3 !== mm3) {
+                    const score1Index = g1 * chefT;
+                    const score2Index = g2 * chefT;
+                    const score3Index = g3 * chefT;
+
+                    if (useDynamicTopK) {
+                        const baseUpperBound = groupBestScoreBase[g1] + groupBestScoreBase[g2] + groupBestScoreBase[g3];
+                        if (baseUpperBound > maxScore) {
+                            for (let i1 = 0; i1 < baseCandidateSlots.length; i1++) {
+                                const c1 = baseCandidateSlots[i1];
+                                const s1 = groupMaxScore[score1Index + c1];
+                                if (s1 === 0 || s1 + groupBestScoreBase[g2] + groupBestScoreBase[g3] <= maxScore) {
+                                    continue;
+                                }
+                                for (let i2 = 0; i2 < baseCandidateSlots.length; i2++) {
+                                    const c2 = baseCandidateSlots[i2];
+                                    const s2 = groupMaxScore[score2Index + c2];
+                                    if (s2 === 0) {
                                         continue;
                                     }
-                                }
+                                    const s12 = s1 + s2;
+                                    if (s12 + groupBestScoreBase[g3] <= maxScore) {
+                                        continue;
+                                    }
+                                    for (let i3 = 0; i3 < baseCandidateSlots.length; i3++) {
+                                        const c3 = baseCandidateSlots[i3];
+                                        const s3 = groupMaxScore[score3Index + c3];
+                                        if (s3 === 0) {
+                                            continue;
+                                        }
+                                        const score = s12 + s3;
+                                        if (score <= maxScore) {
+                                            continue;
+                                        }
+                                        let chef1 = groupMaxScoreChefIndex[score1Index + c1];
+                                        let chef2 = groupMaxScoreChefIndex[score2Index + c2];
+                                        let chef3 = groupMaxScoreChefIndex[score3Index + c3];
+                                        if (!isChefPairValid(chef1, chef2, chef3)) {
+                                            continue;
+                                        }
 
-                                maxScore = score;
-                                result.maxScore = maxScore;
-                                result.maxScoreChefGroup = [chef1, chef2, chef3];
-                                result.recipes = playRecipes.slice(t, t + 9);
-                                result.scores = [s1, s2, s3];
+                                        maxScore = score;
+                                        result.maxScore = maxScore;
+                                        result.maxScoreChefGroup = [chef1, chef2, chef3];
+                                        result.scores = [s1, s2, s3];
+                                        assignBestRecipes(r0, r1, r2, r3, r4, r5, r6, r7, r8);
+                                    }
+                                }
+                            }
+                        }
+
+                        if (fullUpperBound > maxScore && fullUpperBound > baseUpperBound) {
+                            for (let c1 = 0; c1 < chefT; c1++) {
+                                const s1 = groupMaxScore[score1Index + c1];
+                                if (s1 === 0 || s1 + groupBestScore[g2] + groupBestScore[g3] <= maxScore) {
+                                    continue;
+                                }
+                                for (let c2 = 0; c2 < chefT; c2++) {
+                                    const s2 = groupMaxScore[score2Index + c2];
+                                    if (s2 === 0) {
+                                        continue;
+                                    }
+                                    const s12 = s1 + s2;
+                                    if (s12 + groupBestScore[g3] <= maxScore) {
+                                        continue;
+                                    }
+                                    for (let c3 = 0; c3 < chefT; c3++) {
+                                        const s3 = groupMaxScore[score3Index + c3];
+                                        if (s3 === 0) {
+                                            continue;
+                                        }
+                                        const score = s12 + s3;
+                                        if (score <= maxScore) {
+                                            continue;
+                                        }
+                                        let chef1 = groupMaxScoreChefIndex[score1Index + c1];
+                                        let chef2 = groupMaxScoreChefIndex[score2Index + c2];
+                                        let chef3 = groupMaxScoreChefIndex[score3Index + c3];
+                                        if (!isChefPairValid(chef1, chef2, chef3)) {
+                                            continue;
+                                        }
+
+                                        maxScore = score;
+                                        result.maxScore = maxScore;
+                                        result.maxScoreChefGroup = [chef1, chef2, chef3];
+                                        result.scores = [s1, s2, s3];
+                                        assignBestRecipes(r0, r1, r2, r3, r4, r5, r6, r7, r8);
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        for (let c1 = 0; c1 < chefT; c1++) {
+                            const s1 = groupMaxScore[score1Index + c1];
+                            if (s1 === 0 || s1 + groupBestScore[g2] + groupBestScore[g3] <= maxScore) {
+                                continue;
+                            }
+                            for (let c2 = 0; c2 < chefT; c2++) {
+                                const s2 = groupMaxScore[score2Index + c2];
+                                if (s2 === 0) {
+                                    continue;
+                                }
+                                const s12 = s1 + s2;
+                                if (s12 + groupBestScore[g3] <= maxScore) {
+                                    continue;
+                                }
+                                for (let c3 = 0; c3 < chefT; c3++) {
+                                    const s3 = groupMaxScore[score3Index + c3];
+                                    if (s3 === 0) {
+                                        continue;
+                                    }
+                                    const score = s12 + s3;
+                                    if (score <= maxScore) {
+                                        continue;
+                                    }
+                                    let chef1 = groupMaxScoreChefIndex[score1Index + c1];
+                                    let chef2 = groupMaxScoreChefIndex[score2Index + c2];
+                                    let chef3 = groupMaxScoreChefIndex[score3Index + c3];
+                                    if (!isChefPairValid(chef1, chef2, chef3)) {
+                                        continue;
+                                    }
+
+                                    maxScore = score;
+                                    result.maxScore = maxScore;
+                                    result.maxScoreChefGroup = [chef1, chef2, chef3];
+                                    result.scores = [s1, s2, s3];
+                                    assignBestRecipes(r0, r1, r2, r3, r4, r5, r6, r7, r8);
+                                }
                             }
                         }
                     }
                 }
             }
         }
-        //这部分代码能放到gpu执行吗， playRecipes，groupMaxScore，groupMaxScoreChefIndex，chefRealIndex，chefMatchMasks，chefMasks都是  Int32Array,getIndex返回的是正整数
+
+        if (maxScore > 0) {
+            result.recipes = bestRecipes.slice(0);
+        }
 
         endTime = Date.now();
         console.info((limit - start) + "组数据计算用时:" + (endTime - startTime) + "ms");
@@ -409,6 +401,16 @@ export class ChefAndRecipeThread {
         // 直接创建 Uint32Array 以匹配 WGSL 中的 u32 类型，并保证4字节对齐
         const recipePermutationCount = this.recipePL.length;
         const numCombinations = numGroups * recipePermutationCount;
+        const estimatedInputBytes = numCombinations * 9 * 4;
+        const estimatedOutputBytes = numCombinations * 7 * 4;
+        const estimatedTotalBytes = estimatedInputBytes + estimatedOutputBytes;
+        const maxGpuStage2Bytes = 256 * 1024 * 1024;
+        if (estimatedTotalBytes > maxGpuStage2Bytes) {
+            const estimatedMB = (estimatedTotalBytes / 1024 / 1024).toFixed(1);
+            console.warn(`[GPU] 二阶段数据约 ${estimatedMB}MB，超过阈值，回退 CPU 流式计算`);
+            return this.call(start, limit);
+        }
+
         const playRecipes = new Uint32Array(numCombinations * 9);
         const temp = this.playRecipes;
         const recipePL = this.recipePL;
