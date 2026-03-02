@@ -1,5 +1,6 @@
 <template>
-  <div class="app-shell">
+  <div class="app-shell" ref="appShell">
+    <div class="app-layout" ref="appLayout" :style="{ '--layout-scale': layoutScale }">
     <TabGroup :selected-index="selectedTabIndex" @change="onTabChange">
       <TabList class="tab-header">
         <Tab v-for="tab in tabs" :key="tab.key" as="template" v-slot="{ selected }">
@@ -79,26 +80,45 @@
         </div>
 
         <div v-if="topScore !== null" class="top-score-card">
-          <span class="top-score-label">最高分</span>
+          <div class="top-score-meta">
+            <span class="top-score-label">当前最高分</span>
+            <span class="top-score-tip">基于当前规则与筛选参数</span>
+          </div>
           <span class="top-score-value">{{ topScore }}</span>
         </div>
 
-        <div class="top-chef-grid">
+        <div v-else class="empty-result-card">
+          <div class="empty-result-title">还没有计算结果</div>
+          <div class="empty-result-desc">选择规则后点击“计算”，结果会在这里展示。</div>
+        </div>
+
+        <div v-if="topChefs.length" class="top-chef-grid">
           <div
             v-for="(topChef, index) in topChefs"
             :key="`${topChef.chef}-${index}`"
             class="chef-card"
           >
-            <div class="chef-name">{{ topChef.chef }}</div>
-            <div class="chef-equip">{{ topChef.equip }}</div>
-            <div class="chef-recipes">
-              <div v-for="(recipe, recipeIndex) in topChef.recipes || []" :key="recipeIndex">
-                {{ recipe.recipe }}
-              </div>
+            <div class="chef-rank">#{{ index + 1 }}</div>
+            <div class="chef-head">
+              <div class="chef-name">{{ topChef.chef }}</div>
+              <div class="chef-equip">{{ topChef.equip || '未佩戴厨具' }}</div>
             </div>
-            <div class="chef-values">
-              <div v-for="(recipe, recipeIndex) in topChef.recipes || []" :key="recipeIndex">
-                {{ recipe.count }} {{ recipe.singlePrice }}
+            <div class="chef-columns">
+              <div class="chef-column">
+                <div class="chef-column-title">菜谱</div>
+                <div class="chef-recipes">
+                  <div v-for="(recipe, recipeIndex) in topChef.recipes || []" :key="recipeIndex">
+                    {{ recipe.recipe }}
+                  </div>
+                </div>
+              </div>
+              <div class="chef-column">
+                <div class="chef-column-title">份数 / 单价</div>
+                <div class="chef-values">
+                  <div v-for="(recipe, recipeIndex) in topChef.recipes || []" :key="recipeIndex">
+                    {{ recipe.count }} {{ recipe.singlePrice }}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -149,6 +169,7 @@
         </TabPanel>
       </TabPanels>
     </TabGroup>
+    </div>
   </div>
 
   <div class="toast-stack">
@@ -274,6 +295,7 @@ export default {
       curWeekRule: null,
       topChefs: [],
       topScore: null,
+      layoutScale: 1,
     }
   },
   computed: {
@@ -288,14 +310,53 @@ export default {
       this.percentage = Math.round(event.data)
     }
   },
+  mounted() {
+    this.$nextTick(() => {
+      this.updateLayoutScale()
+    })
+    window.addEventListener('resize', this.updateLayoutScale)
+  },
   beforeUnmount() {
     window.onmessage = null
+    window.removeEventListener('resize', this.updateLayoutScale)
   },
   methods: {
+    updateLayoutScale() {
+      const shell = this.$refs.appShell
+      const layout = this.$refs.appLayout
+      if (!shell || !layout) {
+        return
+      }
+
+      const availableHeight = shell.clientHeight
+      let naturalHeight = layout.scrollHeight
+      const contentWrap = layout.querySelector('.tab-content-wrap')
+      if (contentWrap) {
+        const hiddenPart = Math.max(0, contentWrap.scrollHeight - contentWrap.clientHeight)
+        naturalHeight += hiddenPart
+      }
+      if (availableHeight <= 0 || naturalHeight <= 0) {
+        return
+      }
+
+      let nextScale = 1
+      if (naturalHeight > availableHeight) {
+        const safeHeight = Math.max(0, availableHeight - 10)
+        nextScale = safeHeight / naturalHeight
+      }
+      nextScale = Math.min(1, nextScale)
+      const roundedScale = Number(nextScale.toFixed(4))
+      if (Math.abs(roundedScale - this.layoutScale) > 0.0001) {
+        this.layoutScale = roundedScale
+      }
+    },
     onTabChange(index) {
       const tab = this.tabs[index]
       if (tab) {
         this.activeTab = tab.key
+        this.$nextTick(() => {
+          this.updateLayoutScale()
+        })
       }
     },
     isMobile() {
@@ -358,6 +419,9 @@ export default {
 
       this.topChefs = topResult[0].chefs
       this.topScore = topResult[0].score
+      this.$nextTick(() => {
+        this.updateLayoutScale()
+      })
     },
     errorNotify(title, message, type) {
       const id = this.nextNotificationId
@@ -422,6 +486,9 @@ export default {
           value: item.start_time,
         })
       }
+      this.$nextTick(() => {
+        this.updateLayoutScale()
+      })
     },
     async getCurrentWeekRule() {
       // 获得今天日期时间
@@ -486,54 +553,66 @@ export default {
 <style scoped>
 .app-shell {
   width: 100%;
-  max-width: 1160px;
+  max-width: 1140px;
   margin: 0 auto;
-  padding: 20px 16px 24px;
+  padding: 24px 16px 28px;
   text-align: left;
   box-sizing: border-box;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+}
+
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  transform: scale(var(--layout-scale, 1));
+  transform-origin: top center;
 }
 
 .tab-header {
   display: flex;
-  gap: 0;
-  align-items: flex-end;
-  border-bottom: 1px solid #dcdfe6;
-  margin-bottom: 0;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
 .tab-button {
-  border: 1px solid #dcdfe6;
-  border-bottom: none;
-  background: #f5f7fa;
-  color: #606266;
-  border-radius: 4px 4px 0 0;
-  padding: 10px 20px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-soft);
+  color: var(--color-text-muted);
+  border-radius: 10px;
+  padding: 10px 18px;
   cursor: pointer;
   font-size: 14px;
-  line-height: 1;
-  margin-right: 4px;
-  transition: background-color 0.18s ease, color 0.18s ease;
-  transform: translateY(1px);
+  line-height: 1.1;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
 .tab-button:hover {
-  color: #409eff;
-  background: #ecf5ff;
+  color: var(--color-primary);
+  border-color: var(--color-border-strong);
+  background: #f1f7f4;
 }
 
 .tab-button.active {
-  color: #409eff;
-  background: #fff;
-  border-color: #dcdfe6;
-  border-bottom-color: #fff;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  border-color: #b9d9ce;
+  box-shadow: 0 6px 14px rgba(47, 138, 116, 0.14);
 }
 
 .tab-content-wrap {
-  border: 1px solid #dcdfe6;
-  border-top: none;
-  background: #fff;
-  border-radius: 0 4px 4px 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 16px;
   padding: 18px;
+  box-shadow: 0 14px 32px rgba(56, 81, 69, 0.08);
 }
 
 .tab-panel {
@@ -541,10 +620,10 @@ export default {
 }
 
 .panel-card {
-  border: 1px solid #ebeef5;
-  border-radius: 6px;
-  padding: 14px 14px 10px;
-  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--color-surface-soft);
 }
 
 .form-card {
@@ -555,8 +634,8 @@ export default {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin: 0 0 12px;
+  gap: 14px;
+  margin: 0 0 14px;
 }
 
 .form-row:last-child {
@@ -565,38 +644,39 @@ export default {
 
 .form-label {
   min-width: 260px;
-  color: #303133;
+  color: var(--color-text);
   font-size: 14px;
   line-height: 20px;
+  font-weight: 500;
 }
 
 .control {
-  height: 32px;
+  height: 38px;
   min-width: 120px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0 12px;
   font-size: 14px;
-  color: #606266;
-  background: #fff;
+  color: var(--color-text);
+  background: var(--color-surface);
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
   box-sizing: border-box;
 }
 
 .control:focus {
-  border-color: #409eff;
-  box-shadow: 0 0 0 1px #409eff inset;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(47, 138, 116, 0.15);
 }
 
 .rule-select {
-  min-width: 300px;
+  min-width: 320px;
 }
 
 .switch {
   position: relative;
-  width: 42px;
-  height: 24px;
+  width: 46px;
+  height: 26px;
   display: inline-block;
   cursor: pointer;
 }
@@ -612,154 +692,232 @@ export default {
   position: absolute;
   inset: 0;
   border-radius: 999px;
-  border: 1px solid #dcdfe6;
-  background: #dcdfe6;
+  border: 1px solid var(--color-border);
+  background: #c7d5cd;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .switch-track::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   transition: transform 0.2s ease;
 }
 
 .switch-input:checked + .switch-track {
-  background: #409eff;
-  border-color: #409eff;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .switch-input:checked + .switch-track::after {
-  transform: translateX(18px);
+  transform: translateX(20px);
 }
 
 .switch-input:focus-visible + .switch-track {
-  outline: 2px solid #a0cfff;
+  outline: 2px solid rgba(47, 138, 116, 0.5);
   outline-offset: 2px;
 }
 
 .btn-primary {
-  border: 1px solid #79bbff;
-  background: #ecf5ff;
-  color: #409eff;
-  border-radius: 4px;
-  height: 32px;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: #f7fffb;
+  border-radius: 10px;
+  height: 38px;
   padding: 0 18px;
   cursor: pointer;
   font-size: 14px;
-  font-weight: 500;
-  box-shadow: 0 0 0 0 rgba(64, 158, 255, 0);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s,
-    transform 0.05s;
+  font-weight: 600;
+  box-shadow: 0 6px 16px rgba(47, 138, 116, 0.24);
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease,
+    transform 0.05s ease;
 }
 
 .btn-primary:not(:disabled):hover {
-  background: #d9ecff;
-  color: #337ecc;
-  border-color: #409eff;
-  box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.2);
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  box-shadow: 0 8px 18px rgba(37, 111, 94, 0.28);
 }
 
 .btn-primary:not(:disabled):active {
-  background: #c6e2ff;
-  border-color: #337ecc;
-  box-shadow: inset 0 1px 2px rgba(51, 126, 204, 0.25);
+  background: #1f5f50;
+  border-color: #1f5f50;
+  box-shadow: 0 4px 10px rgba(31, 95, 80, 0.28);
   transform: translateY(1px);
 }
 
 .btn-primary:focus-visible {
-  outline: 2px solid #a0cfff;
+  outline: 2px solid rgba(47, 138, 116, 0.45);
   outline-offset: 1px;
 }
 
 .btn-primary:disabled {
-  background: #f5f7fa;
-  border-color: #e4e7ed;
-  color: #c0c4cc;
+  background: #d8e2dd;
+  border-color: #d8e2dd;
+  color: #9aaba2;
   opacity: 1;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .top-score-card {
-  margin: 14px 0;
-  padding: 8px 12px;
-  border-radius: 4px;
-  background: #ecf5ff;
-  border: 1px solid #d9ecff;
-  color: #409eff;
-  display: inline-flex;
+  margin: 16px 0 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: linear-gradient(130deg, var(--color-primary-soft), #f0faf6);
+  border: 1px solid #b8dacc;
+  color: var(--color-text);
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  gap: 18px;
+  max-width: 760px;
+}
+
+.top-score-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .top-score-label {
   font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.top-score-tip {
+  font-size: 12px;
+  color: #799185;
 }
 
 .top-score-value {
-  font-size: 18px;
+  font-size: 26px;
   font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--color-primary);
+}
+
+.empty-result-card {
+  margin: 16px 0 12px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px dashed var(--color-border-strong);
+  background: #f7fbf8;
+  max-width: 760px;
+}
+
+.empty-result-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.empty-result-desc {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
 }
 
 .top-chef-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 12px;
-  margin-top: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
 }
 
 .chef-card {
-  border: 1px solid #ebeef5;
-  border-radius: 6px;
-  padding: 12px;
-  display: grid;
-  grid-template-columns: 0.9fr 1fr 1.6fr 1.3fr;
-  gap: 10px;
-  align-items: start;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   font-size: 14px;
-  color: #303133;
-  background: #fff;
+  color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: 0 8px 20px rgba(48, 76, 63, 0.08);
+}
+
+.chef-rank {
+  width: fit-content;
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.chef-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
 }
 
 .chef-name {
   font-weight: 700;
+  font-size: 16px;
 }
 
 .chef-equip {
-  color: #909399;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.chef-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.chef-column {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfdfb;
+}
+
+.chef-column-title {
+  font-size: 12px;
+  color: #779185;
+  margin-bottom: 8px;
+  font-weight: 600;
 }
 
 .chef-recipes,
 .chef-values {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
+  font-size: 13px;
 }
 
 .chef-values {
-  color: #606266;
+  color: var(--color-text-muted);
 }
 
 .tips-text {
-  color: #606266;
+  color: var(--color-text-muted);
   font-size: 14px;
   line-height: 1.6;
   margin-bottom: 14px;
-  background: #f5f7fa;
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
+  background: #eff6f2;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
   padding: 10px 12px;
 }
 
 .desc-panel p {
-  margin: 6px 0;
-  color: #606266;
+  margin: 8px 0;
+  color: var(--color-text-muted);
   line-height: 1.6;
 }
 
@@ -776,10 +934,11 @@ export default {
 .toast-item {
   min-width: 260px;
   max-width: 360px;
-  border-radius: 6px;
+  border-radius: 10px;
   padding: 12px;
   color: #fff;
-  border: 1px solid #ffffff47;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow: 0 10px 20px rgba(28, 43, 35, 0.2);
 }
 
 .toast-title {
@@ -795,24 +954,26 @@ export default {
 }
 
 .toast-success {
-  background: #67c23a;
+  background: var(--color-success);
 }
 
 .toast-error {
-  background: #f56c6c;
+  background: var(--color-error);
 }
 
 .toast-info {
-  background: #409eff;
+  background: var(--color-info);
 }
 
 @media (max-width: 768px) {
   .app-shell {
-    padding: 12px 10px 18px;
+    padding: 14px 10px 18px;
+    height: 100dvh;
   }
 
   .tab-content-wrap {
     padding: 12px;
+    border-radius: 12px;
   }
 
   .panel-card {
@@ -828,10 +989,31 @@ export default {
   }
 
   .rule-select {
-    min-width: 240px;
+    min-width: 100%;
   }
 
-  .chef-card {
+  .action-row .btn-primary {
+    width: 100%;
+  }
+
+  .action-row .control {
+    width: 100%;
+  }
+
+  .top-score-card {
+    padding: 12px;
+  }
+
+  .top-score-value {
+    font-size: 22px;
+  }
+
+  .chef-head {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .chef-columns {
     grid-template-columns: 1fr;
   }
 }

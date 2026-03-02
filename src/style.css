@@ -1,19 +1,42 @@
 :root {
   font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
-  color: #303133;
-  background: #f5f7fa;
+  --color-bg: #f1f5f1;
+  --color-bg-glow: #e4efe9;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f8fbf8;
+  --color-text: #1f3128;
+  --color-text-muted: #607367;
+  --color-border: #d4e1d8;
+  --color-border-strong: #b8cec0;
+  --color-primary: #2f8a74;
+  --color-primary-hover: #256f5e;
+  --color-primary-soft: #e5f3ee;
+  --color-success: #2f8a74;
+  --color-error: #c05858;
+  --color-info: #487ea7;
+  color: var(--color-text);
+  background: var(--color-bg);
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   min-width: 320px;
+  background: radial-gradient(circle at 10% 12%, var(--color-bg-glow), var(--color-bg) 42%);
+  color: var(--color-text);
+  overflow: hidden;
 }
 
 #app {
   width: 100%;
-  min-height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
