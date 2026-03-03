@@ -561,7 +561,8 @@ export default {
   height: 100dvh;
   overflow: hidden;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
+  align-items: flex-start;
 }
 
 .app-layout {
