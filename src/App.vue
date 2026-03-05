@@ -1,6 +1,6 @@
 <template>
-  <div class="app-shell" ref="appShell">
-    <div class="app-layout" ref="appLayout" :style="{ '--layout-scale': layoutScale }">
+  <div class="app-shell">
+    <div class="app-layout">
     <TabGroup :selected-index="selectedTabIndex" @change="onTabChange">
       <TabList class="tab-header">
         <Tab v-for="tab in tabs" :key="tab.key" as="template" v-slot="{ selected }">
@@ -89,7 +89,7 @@
 
         <div v-else class="empty-result-card">
           <div class="empty-result-title">还没有计算结果</div>
-          <div class="empty-result-desc">选择规则后点击“计算”，结果会在这里展示。</div>
+          <div class="empty-result-desc">选择规则后点击"计算"，结果会在这里展示。</div>
         </div>
 
         <div v-if="topChefs.length" class="top-chef-grid">
@@ -295,7 +295,6 @@ export default {
       curWeekRule: null,
       topChefs: [],
       topScore: null,
-      layoutScale: 1,
     }
   },
   computed: {
@@ -310,53 +309,11 @@ export default {
       this.percentage = Math.round(event.data)
     }
   },
-  mounted() {
-    this.$nextTick(() => {
-      this.updateLayoutScale()
-    })
-    window.addEventListener('resize', this.updateLayoutScale)
-  },
-  beforeUnmount() {
-    window.onmessage = null
-    window.removeEventListener('resize', this.updateLayoutScale)
-  },
   methods: {
-    updateLayoutScale() {
-      const shell = this.$refs.appShell
-      const layout = this.$refs.appLayout
-      if (!shell || !layout) {
-        return
-      }
-
-      const availableHeight = shell.clientHeight
-      let naturalHeight = layout.scrollHeight
-      const contentWrap = layout.querySelector('.tab-content-wrap')
-      if (contentWrap) {
-        const hiddenPart = Math.max(0, contentWrap.scrollHeight - contentWrap.clientHeight)
-        naturalHeight += hiddenPart
-      }
-      if (availableHeight <= 0 || naturalHeight <= 0) {
-        return
-      }
-
-      let nextScale = 1
-      if (naturalHeight > availableHeight) {
-        const safeHeight = Math.max(0, availableHeight - 10)
-        nextScale = safeHeight / naturalHeight
-      }
-      nextScale = Math.min(1, nextScale)
-      const roundedScale = Number(nextScale.toFixed(4))
-      if (Math.abs(roundedScale - this.layoutScale) > 0.0001) {
-        this.layoutScale = roundedScale
-      }
-    },
     onTabChange(index) {
       const tab = this.tabs[index]
       if (tab) {
         this.activeTab = tab.key
-        this.$nextTick(() => {
-          this.updateLayoutScale()
-        })
       }
     },
     isMobile() {
@@ -419,9 +376,6 @@ export default {
 
       this.topChefs = topResult[0].chefs
       this.topScore = topResult[0].score
-      this.$nextTick(() => {
-        this.updateLayoutScale()
-      })
     },
     errorNotify(title, message, type) {
       const id = this.nextNotificationId
@@ -486,9 +440,6 @@ export default {
           value: item.start_time,
         })
       }
-      this.$nextTick(() => {
-        this.updateLayoutScale()
-      })
     },
     async getCurrentWeekRule() {
       // 获得今天日期时间
@@ -555,41 +506,37 @@ export default {
   width: 100%;
   max-width: 1140px;
   margin: 0 auto;
-  padding: 24px 16px 28px;
+  padding: 12px 16px 16px;
   text-align: left;
   box-sizing: border-box;
-  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
-  display: flex;
-  justify-content: flex-start;
-  align-items: flex-start;
 }
 
 .app-layout {
   display: flex;
   flex-direction: column;
-  height: 100%;
   width: 100%;
+  height: 100%;
   min-height: 0;
-  transform: scale(var(--layout-scale, 1));
-  transform-origin: top center;
 }
 
 .tab-header {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .tab-button {
   border: 1px solid var(--color-border);
   background: var(--color-surface-soft);
   color: var(--color-text-muted);
-  border-radius: 10px;
-  padding: 10px 18px;
+  border-radius: 8px;
+  padding: 8px 14px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.1;
   font-weight: 500;
   transition: all 0.2s ease;
@@ -611,19 +558,24 @@ export default {
 .tab-content-wrap {
   border: 1px solid var(--color-border);
   background: var(--color-surface);
-  border-radius: 16px;
-  padding: 18px;
+  border-radius: 14px;
+  padding: 14px;
   box-shadow: 0 14px 32px rgba(56, 81, 69, 0.08);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .tab-panel {
   width: 100%;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .panel-card {
   border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 10px;
+  padding: 12px 14px;
   background: var(--color-surface-soft);
 }
 
@@ -635,8 +587,8 @@ export default {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-  margin: 0 0 14px;
+  gap: 10px;
+  margin: 0 0 10px;
 }
 
 .form-row:last-child {
@@ -644,20 +596,20 @@ export default {
 }
 
 .form-label {
-  min-width: 260px;
+  min-width: 220px;
   color: var(--color-text);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 500;
 }
 
 .control {
-  height: 38px;
-  min-width: 120px;
+  height: 34px;
+  min-width: 110px;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 0 12px;
-  font-size: 14px;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 13px;
   color: var(--color-text);
   background: var(--color-surface);
   outline: none;
@@ -729,11 +681,11 @@ export default {
   border: 1px solid var(--color-primary);
   background: var(--color-primary);
   color: #f7fffb;
-  border-radius: 10px;
-  height: 38px;
-  padding: 0 18px;
+  border-radius: 8px;
+  height: 34px;
+  padding: 0 16px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   box-shadow: 0 6px 16px rgba(47, 138, 116, 0.24);
   transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease,
@@ -768,9 +720,9 @@ export default {
 }
 
 .top-score-card {
-  margin: 16px 0 12px;
-  padding: 14px 16px;
-  border-radius: 12px;
+  margin: 12px 0 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
   background: linear-gradient(130deg, var(--color-primary-soft), #f0faf6);
   border: 1px solid #b8dacc;
   color: var(--color-text);
@@ -788,40 +740,40 @@ export default {
 }
 
 .top-score-label {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--color-text-muted);
 }
 
 .top-score-tip {
-  font-size: 12px;
+  font-size: 11px;
   color: #799185;
 }
 
 .top-score-value {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--color-primary);
 }
 
 .empty-result-card {
-  margin: 16px 0 12px;
-  padding: 16px;
-  border-radius: 12px;
+  margin: 12px 0 8px;
+  padding: 12px;
+  border-radius: 10px;
   border: 1px dashed var(--color-border-strong);
   background: #f7fbf8;
   max-width: 760px;
 }
 
 .empty-result-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-text);
 }
 
 .empty-result-desc {
-  margin-top: 6px;
-  font-size: 13px;
+  margin-top: 4px;
+  font-size: 12px;
   color: var(--color-text-muted);
 }
 
@@ -968,54 +920,190 @@ export default {
 
 @media (max-width: 768px) {
   .app-shell {
-    padding: 14px 10px 18px;
-    height: 100dvh;
+    padding: 8px 8px 12px;
+    min-height: 100dvh;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .app-layout {
+    height: auto;
+    min-height: auto;
+  }
+
+  .tab-header {
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+
+  .tab-button {
+    padding: 6px 10px;
+    font-size: 12px;
+    border-radius: 6px;
   }
 
   .tab-content-wrap {
-    padding: 12px;
-    border-radius: 12px;
+    padding: 10px;
+    border-radius: 10px;
+    flex: none;
+    overflow: visible;
+  }
+
+  .tab-panel {
+    overflow: visible;
   }
 
   .panel-card {
-    padding: 12px 10px;
+    padding: 10px 8px;
+    border-radius: 8px;
   }
 
   .form-card {
     max-width: 100%;
   }
 
+  .form-row {
+    gap: 8px;
+    margin: 0 0 8px;
+  }
+
   .form-label {
     min-width: 100%;
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+
+  .control {
+    height: 36px;
+    font-size: 14px;
+    min-width: auto;
   }
 
   .rule-select {
     min-width: 100%;
+    width: 100%;
+    flex: 1;
   }
 
-  .action-row .btn-primary {
-    width: 100%;
+  .action-row {
+    flex-direction: column;
+    gap: 8px;
   }
 
   .action-row .control {
     width: 100%;
+    height: 40px !important;
+    min-height: 40px;
+    line-height: 38px;
+    padding: 0 10px;
+  }
+
+  .action-row .btn-primary {
+    width: 100%;
+    height: 40px;
+  }
+
+  .btn-primary {
+    height: 36px;
+    padding: 0 14px;
+    font-size: 14px;
   }
 
   .top-score-card {
-    padding: 12px;
+    padding: 10px 12px;
+    margin: 8px 0 6px;
+    border-radius: 8px;
+  }
+
+  .top-score-label {
+    font-size: 11px;
+  }
+
+  .top-score-tip {
+    font-size: 10px;
   }
 
   .top-score-value {
-    font-size: 22px;
+    font-size: 20px;
+  }
+
+  .empty-result-card {
+    padding: 10px;
+    margin: 8px 0 6px;
+    border-radius: 8px;
+  }
+
+  .empty-result-title {
+    font-size: 12px;
+  }
+
+  .empty-result-desc {
+    font-size: 11px;
+    margin-top: 3px;
+  }
+
+  .top-chef-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  .chef-card {
+    padding: 10px;
+    border-radius: 10px;
+    gap: 8px;
+  }
+
+  .chef-rank {
+    font-size: 11px;
+    padding: 4px 6px;
+  }
+
+  .chef-name {
+    font-size: 14px;
+  }
+
+  .chef-equip {
+    font-size: 12px;
   }
 
   .chef-head {
-    flex-direction: column;
-    gap: 4px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
   }
 
   .chef-columns {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .chef-column {
+    padding: 8px;
+    border-radius: 8px;
+  }
+
+  .chef-column-title {
+    font-size: 11px;
+    margin-bottom: 6px;
+  }
+
+  .chef-recipes,
+  .chef-values {
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  .tips-text {
+    font-size: 12px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+  }
+
+  .desc-panel p {
+    margin: 6px 0;
+    font-size: 12px;
   }
 }
 </style>

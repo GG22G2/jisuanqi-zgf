@@ -40,3 +40,17 @@ body {
   height: 100dvh;
   overflow: hidden;
 }
+
+/* 移动端允许滚动 */
+@media (max-width: 768px) {
+  body {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  #app {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+}
