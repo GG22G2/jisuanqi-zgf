@@ -343,111 +343,12 @@ class GodInference {
         this.recipePermutation(1, [], materialCounts, ignoreRecipeId, 0n, initialRecipeCounts, priceAscResult);
         console.timeEnd("菜谱组合用时");
         console.log("实际组合数", this.playRecipeGroup.length)
-        let maxScore = 0;
-        let maxEstimatedScore = 0;
 
-        let totalScoreCache = new Int32Array(this.playRecipeGroup.length);
-        let estimatedScoreCache = new Int32Array(this.playRecipeGroup.length);
+        const groupMaterialCounts = getMaterialCount(this.materials);
+        const groupCandidates = this.collectRecipeGroupCandidates(groupMaterialCounts);
+        const filteredGroups = this.filterRecipeGroupCandidates(groupCandidates);
+        this.playRecipeGroup = filteredGroups.map((item) => item.playRecipeGroup);
 
-        for (let i = 0; i < this.playRecipeGroup.length; i++) {
-            let temp = this.playRecipeGroup[i];
-            if (temp == null) {
-                this.playRecipeGroup.length = i;
-                break
-            }
-            let score = 0;
-            let estimatedScore = 0;
-            for (let j = 0; j < 9; j++) {
-                let count = temp[j].count
-                let ownRecipe = temp[j].recipe
-                const reward = this.recipeReward[ownRecipe.recipeId];
-                //这里要考虑厨师做菜到传可以增加100%售价
-                score += ((ownRecipe.price * (1 + reward + 1) * count) | 0);
-                const estimatedChefAdd = ownRecipe.estimatedChefAdd == null ? 1 : ownRecipe.estimatedChefAdd;
-                estimatedScore += ((ownRecipe.price * (1 + reward + estimatedChefAdd) * count) | 0);
-            }
-            totalScoreCache[i] = score;
-            estimatedScoreCache[i] = estimatedScore;
-            if (maxScore < score) {
-                maxScore = score;
-            }
-            if (maxEstimatedScore < estimatedScore) {
-                maxEstimatedScore = estimatedScore;
-            }
-        }
-        const filterScoreRate = this.filterScoreRate;
-        const scoreThreshold = maxScore * filterScoreRate;
-        const estimatedScoreThreshold = maxEstimatedScore * filterScoreRate;
-        const candidateMap = new Map();
-        let baseCount = 0;
-        for (let i = 0; i < this.playRecipeGroup.length; i++) {
-            let temp = this.playRecipeGroup[i];
-            if (temp == null) {
-                continue
-            }
-            let score = totalScoreCache[i];
-            let estimatedScore = estimatedScoreCache[i];
-            let basePass = score >= scoreThreshold;
-            let estimatedPass = estimatedScore >= estimatedScoreThreshold;
-            if (!basePass && !estimatedPass) {
-                continue;
-            }
-            temp.sort((r1, r2) => {
-                return r2.id - r1.id;
-            });
-            let key = "";
-            for (let j = 0; j < 9; j++) {
-                let count = temp[j].count
-                let ownRecipe = temp[j].recipe
-                key = key + "-" + ownRecipe.recipeId + "-" + count
-            }
-            let oldCandidate = candidateMap.get(key);
-            if (oldCandidate == null) {
-                if (basePass) {
-                    baseCount++;
-                }
-                candidateMap.set(key, {
-                    playRecipeGroup: temp,
-                    score,
-                    estimatedScore,
-                    basePass
-                });
-            } else {
-                if (basePass && !oldCandidate.basePass) {
-                    oldCandidate.basePass = true;
-                    baseCount++;
-                }
-                const oldCombined = oldCandidate.score + oldCandidate.estimatedScore;
-                const newCombined = score + estimatedScore;
-                if (newCombined > oldCombined) {
-                    oldCandidate.playRecipeGroup = temp;
-                }
-                if (score > oldCandidate.score) {
-                    oldCandidate.score = score;
-                }
-                if (estimatedScore > oldCandidate.estimatedScore) {
-                    oldCandidate.estimatedScore = estimatedScore;
-                }
-            }
-        }
-
-        let candidates = Array.from(candidateMap.values());
-        if (baseCount <= 0 || candidates.length <= baseCount) {
-            this.playRecipeGroup = candidates.map((item) => item.playRecipeGroup);
-        } else {
-            const safeMaxScore = maxScore <= 0 ? 1 : maxScore;
-            const safeMaxEstimatedScore = maxEstimatedScore <= 0 ? 1 : maxEstimatedScore;
-            candidates.sort((a, b) => {
-                const aRank = Math.max(a.score / safeMaxScore, a.estimatedScore / safeMaxEstimatedScore);
-                const bRank = Math.max(b.score / safeMaxScore, b.estimatedScore / safeMaxEstimatedScore);
-                return bRank - aRank;
-            });
-            let targetCount = Math.ceil(baseCount * this.estimatedCandidateKeepRate);
-            targetCount = Math.min(targetCount, baseCount + this.maxEstimatedCandidateExtra);
-            targetCount = Math.max(baseCount, targetCount);
-            candidates.length = Math.min(targetCount, candidates.length);
-            this.playRecipeGroup = candidates.map((item) => item.playRecipeGroup);
-        }
         console.timeEnd('排列菜谱')
         console.info("候选菜谱组合列表" + this.playRecipeGroup.length);
 
@@ -479,6 +380,437 @@ class GodInference {
         for (let [key, value] of maps.entries()) {
             this.playRecipes[value.index] = value
         }
+    }
+
+    collectRecipeGroupCandidates(materialCounts) {
+        const candidateMap = new Map();
+        for (let i = 0; i < this.playRecipeGroup.length; i++) {
+            const playRecipeGroup = this.playRecipeGroup[i];
+            if (playRecipeGroup == null) {
+                this.playRecipeGroup.length = i;
+                break;
+            }
+            playRecipeGroup.sort((r1, r2) => {
+                return r2.id - r1.id;
+            });
+            const key = this.getRecipeGroupKey(playRecipeGroup);
+            if (candidateMap.has(key)) {
+                continue;
+            }
+            candidateMap.set(key, this.buildRecipeGroupCandidate(playRecipeGroup, materialCounts));
+        }
+        return Array.from(candidateMap.values());
+    }
+
+    buildRecipeGroupCandidate(playRecipeGroup, materialCounts) {
+        let score = 0;
+        let estimatedScore = 0;
+        let scarcityCost = 0;
+        const flavorSeen = [0, 0, 0, 0, 0, 0];
+        const skillSeen = [0, 0, 0, 0, 0, 0];
+        const raritySeen = [0, 0, 0, 0, 0, 0];
+        const ingredientSeen = [0, 0, 0, 0];
+        let comboSourceMask = 0;
+        let sourceWeight = 0;
+        let specialRecipeCount = 0;
+        let chefRecipeHits = 0;
+        let ruleRecipeHits = 0;
+        let scarceRecipeHits = 0;
+
+        for (let i = 0; i < 9; i++) {
+            const playRecipe = playRecipeGroup[i];
+            const count = playRecipe.count;
+            const recipe = playRecipe.recipe;
+            const reward = this.recipeReward[recipe.recipeId];
+            score += ((recipe.price * (1 + reward + 1) * count) | 0);
+            const estimatedChefAdd = recipe.estimatedChefAdd == null ? 1 : recipe.estimatedChefAdd;
+            estimatedScore += ((recipe.price * (1 + reward + estimatedChefAdd) * count) | 0);
+
+            const materials = recipe.materials2 == null ? recipe.materials : recipe.materials2;
+            for (let j = 0; j < materials.length; j++) {
+                const material = materials[j];
+                const available = Math.max(1, materialCounts[material.material] | 0);
+                scarcityCost += (material.quantity * count) / available;
+            }
+
+            switch (recipe.condiment) {
+                case 'Tasty':
+                    flavorSeen[0] = 1;
+                    break;
+                case 'Salty':
+                    flavorSeen[1] = 1;
+                    break;
+                case 'Spicy':
+                    flavorSeen[2] = 1;
+                    break;
+                case 'Sweet':
+                    flavorSeen[3] = 1;
+                    break;
+                case 'Bitter':
+                    flavorSeen[4] = 1;
+                    break;
+                case 'Sour':
+                    flavorSeen[5] = 1;
+                    break;
+                default:
+                    break;
+            }
+            if (recipe.bake > 0) {
+                skillSeen[0] = 1;
+            }
+            if (recipe.boil > 0) {
+                skillSeen[1] = 1;
+            }
+            if (recipe.stirfry > 0) {
+                skillSeen[2] = 1;
+            }
+            if (recipe.knife > 0) {
+                skillSeen[3] = 1;
+            }
+            if (recipe.fry > 0) {
+                skillSeen[4] = 1;
+            }
+            if (recipe.steam > 0) {
+                skillSeen[5] = 1;
+            }
+            if (recipe.rarity >= 0 && recipe.rarity < raritySeen.length) {
+                raritySeen[recipe.rarity] = 1;
+            }
+            const tags = recipe.tags == null ? [] : recipe.tags;
+            for (let j = 0; j < ingredientSeen.length; j++) {
+                if (tags[j]) {
+                    ingredientSeen[j] = 1;
+                }
+            }
+
+            const sourceMask = this.getRecipeCandidateSourceMask(recipe);
+            comboSourceMask |= sourceMask;
+            const recipeSourceCount = recipe.candidateSourceCount == null ? 1 : recipe.candidateSourceCount;
+            sourceWeight += recipeSourceCount;
+            if ((sourceMask & 30) !== 0) {
+                specialRecipeCount++;
+            }
+            if ((sourceMask & 2) !== 0) {
+                chefRecipeHits++;
+            }
+            if ((sourceMask & 4) !== 0) {
+                ruleRecipeHits++;
+            }
+            if ((sourceMask & 8) !== 0) {
+                scarceRecipeHits++;
+            }
+        }
+
+        const sourceCoverage = this.countMaskBits(comboSourceMask);
+        const flavorCoverage = flavorSeen.reduce((acc, value) => acc + value, 0);
+        const skillCoverage = skillSeen.reduce((acc, value) => acc + value, 0);
+        const rarityCoverage = raritySeen.reduce((acc, value) => acc + value, 0);
+        const ingredientCoverage = ingredientSeen.reduce((acc, value) => acc + value, 0);
+        const ruleCoverageScore = flavorCoverage * 1.25
+            + skillCoverage * 1.4
+            + rarityCoverage * 0.9
+            + ingredientCoverage * 1.0;
+        const sourceScore = sourceCoverage * 3
+            + specialRecipeCount * 1.5
+            + chefRecipeHits * 1.6
+            + ruleRecipeHits * 1.35
+            + scarceRecipeHits * 1.35
+            + sourceWeight * 0.35;
+        const scarceEfficiency = scarcityCost <= 0 ? estimatedScore : estimatedScore / scarcityCost;
+
+        return {
+            playRecipeGroup,
+            score,
+            estimatedScore,
+            scarceEfficiency,
+            ruleCoverageScore,
+            sourceScore,
+            sourceCoverage,
+            specialRecipeCount,
+            sourceCount: 0,
+            scorePass: false,
+            estimatedPass: false,
+            hasScore: false,
+            hasEstimated: false,
+            hasScarce: false,
+            hasCoverage: false,
+            hasSource: false,
+            scoreRank: Number.POSITIVE_INFINITY,
+            estimatedRank: Number.POSITIVE_INFINITY,
+            scarceRank: Number.POSITIVE_INFINITY,
+            coverageRank: Number.POSITIVE_INFINITY,
+            sourceRank: Number.POSITIVE_INFINITY,
+            compositeScore: 0
+        };
+    }
+
+    getRecipeGroupKey(playRecipeGroup) {
+        let key = '';
+        for (let i = 0; i < 9; i++) {
+            const playRecipe = playRecipeGroup[i];
+            key = key + '-' + playRecipe.recipe.recipeId + '-' + playRecipe.count;
+        }
+        return key;
+    }
+
+    getRecipeGroupExtraKeepLimit(baseKeepCount, totalCount) {
+        const fallback = Math.max(this.recipeLimit * 3, 120);
+        const baseExtra = Math.min(this.maxEstimatedCandidateExtra, fallback);
+        const target = baseKeepCount > 0
+            ? Math.max(Math.ceil(baseKeepCount * 0.4), baseExtra)
+            : fallback;
+        return Math.min(totalCount, Math.max(1, target));
+    }
+
+    filterRecipeGroupCandidates(candidates) {
+        if (candidates.length === 0) {
+            return [];
+        }
+
+        let maxScore = 0;
+        let maxEstimatedScore = 0;
+        let maxScarceEfficiency = 0;
+        let maxRuleCoverageScore = 0;
+        let maxSourceScore = 0;
+        let maxSourceCoverage = 0;
+        let maxSpecialRecipeCount = 0;
+        for (let i = 0; i < candidates.length; i++) {
+            const candidate = candidates[i];
+            if (candidate.score > maxScore) {
+                maxScore = candidate.score;
+            }
+            if (candidate.estimatedScore > maxEstimatedScore) {
+                maxEstimatedScore = candidate.estimatedScore;
+            }
+            if (candidate.scarceEfficiency > maxScarceEfficiency) {
+                maxScarceEfficiency = candidate.scarceEfficiency;
+            }
+            if (candidate.ruleCoverageScore > maxRuleCoverageScore) {
+                maxRuleCoverageScore = candidate.ruleCoverageScore;
+            }
+            if (candidate.sourceScore > maxSourceScore) {
+                maxSourceScore = candidate.sourceScore;
+            }
+            if (candidate.sourceCoverage > maxSourceCoverage) {
+                maxSourceCoverage = candidate.sourceCoverage;
+            }
+            if (candidate.specialRecipeCount > maxSpecialRecipeCount) {
+                maxSpecialRecipeCount = candidate.specialRecipeCount;
+            }
+        }
+
+        const scoreThreshold = maxScore * this.filterScoreRate;
+        const estimatedScoreThreshold = maxEstimatedScore * this.filterScoreRate;
+        let baseKeepCount = 0;
+        for (let i = 0; i < candidates.length; i++) {
+            const candidate = candidates[i];
+            const scorePass = candidate.score >= scoreThreshold;
+            const estimatedPass = candidate.estimatedScore >= estimatedScoreThreshold;
+            candidate.scorePass = scorePass;
+            candidate.estimatedPass = estimatedPass;
+            if (scorePass || estimatedPass) {
+                baseKeepCount++;
+            }
+            if (scorePass) {
+                this.markRecipeGroupCandidateSource(candidate, 'score');
+            }
+            if (estimatedPass) {
+                this.markRecipeGroupCandidateSource(candidate, 'estimated');
+            }
+        }
+
+        const extraKeepLimit = this.getRecipeGroupExtraKeepLimit(baseKeepCount, candidates.length);
+        const scoreRanked = candidates.slice();
+        scoreRanked.sort((a, b) => {
+            return b.score - a.score
+                || b.estimatedScore - a.estimatedScore
+                || b.sourceScore - a.sourceScore;
+        });
+        this.collectRankedRecipeGroupCandidates(scoreRanked, extraKeepLimit, 'score');
+
+        const estimatedRanked = candidates.slice();
+        estimatedRanked.sort((a, b) => {
+            return b.estimatedScore - a.estimatedScore
+                || b.score - a.score
+                || b.sourceScore - a.sourceScore;
+        });
+        this.collectRankedRecipeGroupCandidates(estimatedRanked, extraKeepLimit, 'estimated');
+
+        const scarceRanked = candidates.slice();
+        scarceRanked.sort((a, b) => {
+            return b.scarceEfficiency - a.scarceEfficiency
+                || b.estimatedScore - a.estimatedScore
+                || b.score - a.score;
+        });
+        this.collectRankedRecipeGroupCandidates(scarceRanked, extraKeepLimit, 'scarce');
+
+        const coverageRanked = candidates.slice();
+        coverageRanked.sort((a, b) => {
+            return b.ruleCoverageScore - a.ruleCoverageScore
+                || b.estimatedScore - a.estimatedScore
+                || b.scarceEfficiency - a.scarceEfficiency;
+        });
+        this.collectRankedRecipeGroupCandidates(coverageRanked, extraKeepLimit, 'coverage');
+
+        const sourceRanked = candidates.slice();
+        sourceRanked.sort((a, b) => {
+            return b.sourceScore - a.sourceScore
+                || b.estimatedScore - a.estimatedScore
+                || b.ruleCoverageScore - a.ruleCoverageScore;
+        });
+        this.collectRankedRecipeGroupCandidates(sourceRanked, extraKeepLimit, 'source');
+
+        let selectedCandidates = candidates.filter((candidate) => {
+            return candidate.sourceCount > 0 || candidate.scorePass || candidate.estimatedPass;
+        });
+        if (selectedCandidates.length === 0) {
+            selectedCandidates = estimatedRanked.slice(0, extraKeepLimit);
+        }
+
+        const normalization = {
+            safeMaxScore: maxScore <= 0 ? 1 : maxScore,
+            safeMaxEstimatedScore: maxEstimatedScore <= 0 ? 1 : maxEstimatedScore,
+            safeMaxScarceEfficiency: maxScarceEfficiency <= 0 ? 1 : maxScarceEfficiency,
+            safeMaxRuleCoverageScore: maxRuleCoverageScore <= 0 ? 1 : maxRuleCoverageScore,
+            safeMaxSourceScore: maxSourceScore <= 0 ? 1 : maxSourceScore,
+            safeMaxSourceCoverage: maxSourceCoverage <= 0 ? 1 : maxSourceCoverage,
+            safeMaxSpecialRecipeCount: maxSpecialRecipeCount <= 0 ? 1 : maxSpecialRecipeCount,
+            rankLimit: extraKeepLimit
+        };
+        for (let i = 0; i < selectedCandidates.length; i++) {
+            const candidate = selectedCandidates[i];
+            candidate.compositeScore = this.recipeGroupCompositeScore(candidate, normalization);
+        }
+        selectedCandidates.sort((a, b) => {
+            return b.compositeScore - a.compositeScore
+                || b.estimatedScore - a.estimatedScore
+                || b.score - a.score
+                || b.sourceScore - a.sourceScore;
+        });
+
+        if (baseKeepCount > 0 && selectedCandidates.length > baseKeepCount) {
+            let targetCount = Math.ceil(baseKeepCount * this.estimatedCandidateKeepRate);
+            targetCount = Math.min(targetCount, baseKeepCount + this.maxEstimatedCandidateExtra);
+            targetCount = Math.max(baseKeepCount, targetCount);
+            const extraOnlyCount = selectedCandidates.reduce((acc, candidate) => {
+                return acc + ((!candidate.scorePass && !candidate.estimatedPass) ? 1 : 0);
+            }, 0);
+            const reservedExtra = Math.min(extraOnlyCount, Math.max(30, Math.ceil(extraKeepLimit * 0.2)));
+            targetCount = Math.max(targetCount, Math.min(selectedCandidates.length, baseKeepCount + reservedExtra));
+            if (selectedCandidates.length > targetCount) {
+                selectedCandidates.length = targetCount;
+            }
+        }
+
+        console.info('[group-candidate] base=' + baseKeepCount
+            + ' extraTop=' + extraKeepLimit
+            + ' union=' + candidates.length
+            + ' final=' + selectedCandidates.length);
+        return selectedCandidates;
+    }
+
+    collectRankedRecipeGroupCandidates(ranked, limit, sourceType) {
+        const take = Math.min(limit, ranked.length);
+        for (let i = 0; i < take; i++) {
+            const candidate = ranked[i];
+            const rank = i + 1;
+            this.markRecipeGroupCandidateSource(candidate, sourceType);
+            if (sourceType === 'score') {
+                candidate.scoreRank = Math.min(candidate.scoreRank, rank);
+            } else if (sourceType === 'estimated') {
+                candidate.estimatedRank = Math.min(candidate.estimatedRank, rank);
+            } else if (sourceType === 'scarce') {
+                candidate.scarceRank = Math.min(candidate.scarceRank, rank);
+            } else if (sourceType === 'coverage') {
+                candidate.coverageRank = Math.min(candidate.coverageRank, rank);
+            } else if (sourceType === 'source') {
+                candidate.sourceRank = Math.min(candidate.sourceRank, rank);
+            }
+        }
+    }
+
+    markRecipeGroupCandidateSource(candidate, sourceType) {
+        if (sourceType === 'score') {
+            if (!candidate.hasScore) {
+                candidate.hasScore = true;
+                candidate.sourceCount++;
+            }
+            return;
+        }
+        if (sourceType === 'estimated') {
+            if (!candidate.hasEstimated) {
+                candidate.hasEstimated = true;
+                candidate.sourceCount++;
+            }
+            return;
+        }
+        if (sourceType === 'scarce') {
+            if (!candidate.hasScarce) {
+                candidate.hasScarce = true;
+                candidate.sourceCount++;
+            }
+            return;
+        }
+        if (sourceType === 'coverage') {
+            if (!candidate.hasCoverage) {
+                candidate.hasCoverage = true;
+                candidate.sourceCount++;
+            }
+            return;
+        }
+        if (!candidate.hasSource) {
+            candidate.hasSource = true;
+            candidate.sourceCount++;
+        }
+    }
+
+    recipeGroupCompositeScore(candidate, normalization) {
+        const scoreNorm = candidate.score / normalization.safeMaxScore;
+        const estimatedNorm = candidate.estimatedScore / normalization.safeMaxEstimatedScore;
+        const scarceNorm = candidate.scarceEfficiency / normalization.safeMaxScarceEfficiency;
+        const coverageNorm = candidate.ruleCoverageScore / normalization.safeMaxRuleCoverageScore;
+        const sourceNorm = candidate.sourceScore / normalization.safeMaxSourceScore;
+        const sourceCoverageNorm = candidate.sourceCoverage / normalization.safeMaxSourceCoverage;
+        const specialRecipeNorm = candidate.specialRecipeCount / normalization.safeMaxSpecialRecipeCount;
+        const scoreRankNorm = this.normalizeCandidateRank(candidate.scoreRank, normalization.rankLimit);
+        const estimatedRankNorm = this.normalizeCandidateRank(candidate.estimatedRank, normalization.rankLimit);
+        const scarceRankNorm = this.normalizeCandidateRank(candidate.scarceRank, normalization.rankLimit);
+        const coverageRankNorm = this.normalizeCandidateRank(candidate.coverageRank, normalization.rankLimit);
+        const sourceRankNorm = this.normalizeCandidateRank(candidate.sourceRank, normalization.rankLimit);
+        const sourceTypeNorm = candidate.sourceCount / 5;
+
+        return scoreNorm * 0.2
+            + estimatedNorm * 0.24
+            + scarceNorm * 0.12
+            + coverageNorm * 0.12
+            + sourceNorm * 0.12
+            + scoreRankNorm * 0.06
+            + estimatedRankNorm * 0.08
+            + scarceRankNorm * 0.05
+            + coverageRankNorm * 0.05
+            + sourceRankNorm * 0.05
+            + sourceCoverageNorm * 0.03
+            + specialRecipeNorm * 0.03
+            + sourceTypeNorm * 0.03
+            + (candidate.scorePass ? 0.03 : 0)
+            + (candidate.estimatedPass ? 0.05 : 0);
+    }
+
+    getRecipeCandidateSourceMask(recipe) {
+        if (recipe.candidateSourceMask == null || recipe.candidateSourceMask === 0) {
+            return 1;
+        }
+        return recipe.candidateSourceMask;
+    }
+
+    countMaskBits(mask) {
+        let value = mask >>> 0;
+        let count = 0;
+        while (value !== 0) {
+            count += value & 1;
+            value >>>= 1;
+        }
+        return count;
     }
 
     estimatedPriceAndSort(quantity, recipes, limit) {
@@ -589,7 +921,20 @@ class GodInference {
             selectedMetrics.length = finalLimit;
         }
 
-        const selectedRecipes = selectedMetrics.map((item) => item.recipe);
+        const selectedRecipes = selectedMetrics.map((item) => {
+            const recipe = item.recipe;
+            recipe.candidateSourceMask = (item.hasGlobal ? 1 : 0)
+                | (item.hasChef ? 2 : 0)
+                | (item.hasRule ? 4 : 0)
+                | (item.hasScarce ? 8 : 0)
+                | (item.hasPerturb ? 16 : 0);
+            recipe.candidateSourceCount = item.sourceCount;
+            recipe.candidateSortScore = item.sortScore;
+            recipe.candidateBestChefScore = item.bestChefScore;
+            recipe.candidateRuleHits = item.ruleHits;
+            recipe.candidateChefHits = item.chefHits;
+            return recipe;
+        });
         console.info(`[recipe-candidate] global=${globalTopK} chef=${chefTopK} rule=${ruleBucketTopK} scarce=${scarceTopK} union=${selectedMap.size} final=${selectedRecipes.length} runs=${runs}`);
         return selectedRecipes;
     }
