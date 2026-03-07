@@ -30,6 +30,9 @@ class GodInference {
         this.recipePerturbRuns = 4;
         this.recipeCandidateExpandRate = 1.35;
         this.recipeCandidateExpandMax = 60;
+        this.chefRecipeTopK = 120;
+        this.ruleBucketTopK = 30;
+        this.scarceRecipeTopK = 40;
 
         if (calConfig != null) {
             this.chefMinRarity = calConfig.chefMinRarity;
@@ -55,6 +58,15 @@ class GodInference {
             }
             if (calConfig.recipeCandidateExpandMax != null) {
                 this.recipeCandidateExpandMax = Math.max(0, calConfig.recipeCandidateExpandMax | 0);
+            }
+            if (calConfig.chefRecipeTopK != null) {
+                this.chefRecipeTopK = Math.max(1, calConfig.chefRecipeTopK | 0);
+            }
+            if (calConfig.ruleBucketTopK != null) {
+                this.ruleBucketTopK = Math.max(1, calConfig.ruleBucketTopK | 0);
+            }
+            if (calConfig.scarceRecipeTopK != null) {
+                this.scarceRecipeTopK = Math.max(1, calConfig.scarceRecipeTopK | 0);
             }
         }
 
@@ -496,18 +508,102 @@ class GodInference {
             return [];
         }
 
-        this.estimatedPriceAndSort(quantity, recipes);
-        if (recipes.length <= baseLimit || this.recipePerturbRuns <= 1) {
-            return recipes.slice(0, baseLimit);
+        const context = this.buildRecipeCandidateContext(quantity, recipes);
+        const metrics = context.metrics;
+        if (metrics.length === 0) {
+            return [];
         }
 
+        const selectedMap = new Map();
+
+        const globalRanked = metrics.slice();
+        globalRanked.sort((a, b) => {
+            return b.totalScore - a.totalScore
+                || b.unitScore - a.unitScore
+                || b.count - a.count
+                || a.recipe.recipeId - b.recipe.recipeId;
+        });
+        const globalTopK = Math.min(baseLimit, globalRanked.length);
+        this.collectRankedRecipeMetrics(globalRanked, globalTopK, selectedMap, 'global');
+
+        const chefTopK = Math.min(this.chefRecipeTopK, metrics.length);
+        const maxChefScore = chefTopK > 0 ? this.collectChefRecipeMetrics(metrics, selectedMap, chefTopK) : 0;
+
+        const ruleBucketTopK = Math.min(this.ruleBucketTopK, metrics.length);
+        if (ruleBucketTopK > 0) {
+            this.collectRuleBucketRecipeMetrics(metrics, selectedMap, ruleBucketTopK);
+        }
+
+        const scarceTopK = Math.min(this.scarceRecipeTopK, metrics.length);
+        if (scarceTopK > 0) {
+            const scarceRanked = metrics.slice();
+            scarceRanked.sort((a, b) => {
+                return b.scarceEfficiency - a.scarceEfficiency
+                    || b.totalScore - a.totalScore
+                    || b.unitScore - a.unitScore
+                    || a.recipe.recipeId - b.recipe.recipeId;
+            });
+            this.collectRankedRecipeMetrics(scarceRanked, scarceTopK, selectedMap, 'scarce');
+        }
+
+        const runs = Math.max(1, this.recipePerturbRuns | 0);
+        if (runs > 1) {
+            this.collectPerturbedRecipeMetrics(metrics, selectedMap, baseLimit, runs, context);
+        }
+
+        let finalLimit = baseLimit;
+        if (selectedMap.size > baseLimit) {
+            let expandByRate = Math.ceil(baseLimit * this.recipeCandidateExpandRate);
+            finalLimit = Math.max(baseLimit, expandByRate);
+            finalLimit = Math.min(finalLimit, baseLimit + this.recipeCandidateExpandMax);
+            finalLimit = Math.min(finalLimit, selectedMap.size);
+        }
+
+        const normalization = {
+            safeMaxTotal: context.safeMaxTotal,
+            safeMaxUnit: context.safeMaxUnit,
+            safeMaxCount: context.safeMaxCount,
+            safeMaxScarceEfficiency: context.safeMaxScarceEfficiency,
+            safeMaxChefScore: maxChefScore <= 0 ? 1 : maxChefScore,
+            globalLimit: globalTopK,
+            chefLimit: chefTopK,
+            chefCount: this.estimatedChefs == null ? 0 : this.estimatedChefs.length,
+            ruleLimit: ruleBucketTopK,
+            scarceLimit: scarceTopK,
+            perturbLimit: baseLimit
+        };
+
+        const selectedMetrics = Array.from(selectedMap.values());
+        for (let i = 0; i < selectedMetrics.length; i++) {
+            const meta = selectedMetrics[i];
+            meta.sortScore = this.recipeCandidateCompositeScore(meta, normalization);
+        }
+        selectedMetrics.sort((a, b) => {
+            return b.sortScore - a.sortScore
+                || b.metric.totalScore - a.metric.totalScore
+                || b.metric.unitScore - a.metric.unitScore
+                || b.metric.count - a.metric.count
+                || a.recipe.recipeId - b.recipe.recipeId;
+        });
+        if (selectedMetrics.length > finalLimit) {
+            selectedMetrics.length = finalLimit;
+        }
+
+        const selectedRecipes = selectedMetrics.map((item) => item.recipe);
+        console.info(`[recipe-candidate] global=${globalTopK} chef=${chefTopK} rule=${ruleBucketTopK} scarce=${scarceTopK} union=${selectedMap.size} final=${selectedRecipes.length} runs=${runs}`);
+        return selectedRecipes;
+    }
+
+    buildRecipeCandidateContext(quantity, recipes) {
         const metrics = new Array(recipes.length);
-        const metricByRecipeId = new Map();
+        const materialCounts = getMaterialCount(this.materials);
         let maxTotal = 0;
         let maxUnit = 0;
         let maxCount = 0;
+        let maxScarceEfficiency = 0;
+
         for (let i = 0; i < recipes.length; i++) {
-            let recipe = recipes[i];
+            const recipe = recipes[i];
             const recipeId = recipe.recipeId;
             const count = quantity[recipeId] | 0;
             const reward = this.recipeReward[recipeId];
@@ -518,14 +614,18 @@ class GodInference {
             }
             const unitScore = recipe.price * (1 + reward + estimatedChefAdd);
             const totalScore = ((unitScore * count) | 0);
+            const calRecipe = new CalRecipe(recipe, Math.max(1, count));
+            const scarceEfficiency = this.recipeScarceEfficiency(recipe, unitScore, materialCounts);
             const metric = {
                 recipe,
+                calRecipe,
                 totalScore,
                 unitScore,
-                count
+                count,
+                scarceEfficiency
             };
             metrics[i] = metric;
-            metricByRecipeId.set(recipeId, metric);
+
             if (totalScore > maxTotal) {
                 maxTotal = totalScore;
             }
@@ -535,17 +635,143 @@ class GodInference {
             if (count > maxCount) {
                 maxCount = count;
             }
+            if (scarceEfficiency > maxScarceEfficiency) {
+                maxScarceEfficiency = scarceEfficiency;
+            }
         }
 
-        const selectedMap = new Map();
-        for (let i = 0; i < baseLimit; i++) {
-            selectedMap.set(recipes[i].recipeId, recipes[i]);
+        return {
+            metrics,
+            safeMaxTotal: maxTotal <= 0 ? 1 : maxTotal,
+            safeMaxUnit: maxUnit <= 0 ? 1 : maxUnit,
+            safeMaxCount: maxCount <= 0 ? 1 : maxCount,
+            safeMaxScarceEfficiency: maxScarceEfficiency <= 0 ? 1 : maxScarceEfficiency
+        };
+    }
+
+    recipeScarceEfficiency(recipe, unitScore, materialCounts) {
+        const materials = recipe.materials2 == null ? recipe.materials : recipe.materials2;
+        if (materials == null || materials.length === 0) {
+            return unitScore;
         }
 
-        const runs = Math.max(1, this.recipePerturbRuns | 0);
-        const safeMaxTotal = maxTotal <= 0 ? 1 : maxTotal;
-        const safeMaxUnit = maxUnit <= 0 ? 1 : maxUnit;
-        const safeMaxCount = maxCount <= 0 ? 1 : maxCount;
+        let scarcityCost = 0;
+        for (let i = 0; i < materials.length; i++) {
+            const material = materials[i];
+            const available = Math.max(1, materialCounts[material.material] | 0);
+            scarcityCost += material.quantity / available;
+        }
+        if (scarcityCost <= 0) {
+            return unitScore;
+        }
+        return unitScore / scarcityCost;
+    }
+
+    collectRankedRecipeMetrics(ranked, limit, selectedMap, sourceType) {
+        const take = Math.min(limit, ranked.length);
+        for (let i = 0; i < take; i++) {
+            const metric = ranked[i];
+            const meta = this.getOrCreateRecipeCandidateMeta(selectedMap, metric);
+            this.markRecipeCandidateSource(meta, sourceType);
+            const rank = i + 1;
+            if (sourceType === 'global') {
+                meta.globalRank = Math.min(meta.globalRank, rank);
+            } else if (sourceType === 'scarce') {
+                meta.scarceRank = Math.min(meta.scarceRank, rank);
+            } else if (sourceType === 'perturb') {
+                meta.perturbHits++;
+                meta.bestPerturbRank = Math.min(meta.bestPerturbRank, rank);
+            }
+        }
+    }
+
+    collectChefRecipeMetrics(metrics, selectedMap, chefTopK) {
+        const chefs = this.estimatedChefs;
+        const priceCal = this.estimatedQualityCal;
+        if (chefs == null || chefs.length === 0 || priceCal == null) {
+            return 0;
+        }
+
+        let maxChefScore = 0;
+        for (let i = 0; i < chefs.length; i++) {
+            const chef = chefs[i];
+            const ranked = new Array(metrics.length);
+            for (let j = 0; j < metrics.length; j++) {
+                const metric = metrics[j];
+                const singlePrice = priceCal.calSinglePrice(chef, metric.calRecipe);
+                const chefScore = singlePrice <= 0 ? 0 : singlePrice * metric.count;
+                ranked[j] = {
+                    metric,
+                    chefScore
+                };
+                if (chefScore > maxChefScore) {
+                    maxChefScore = chefScore;
+                }
+            }
+
+            ranked.sort((a, b) => {
+                return b.chefScore - a.chefScore
+                    || b.metric.totalScore - a.metric.totalScore
+                    || b.metric.unitScore - a.metric.unitScore
+                    || a.metric.recipe.recipeId - b.metric.recipe.recipeId;
+            });
+
+            const take = Math.min(chefTopK, ranked.length);
+            for (let rankIndex = 0; rankIndex < take; rankIndex++) {
+                const entry = ranked[rankIndex];
+                if (entry.chefScore <= 0) {
+                    break;
+                }
+                const meta = this.getOrCreateRecipeCandidateMeta(selectedMap, entry.metric);
+                this.markRecipeCandidateSource(meta, 'chef');
+                meta.chefHits++;
+                meta.bestChefRank = Math.min(meta.bestChefRank, rankIndex + 1);
+                if (entry.chefScore > meta.bestChefScore) {
+                    meta.bestChefScore = entry.chefScore;
+                }
+            }
+        }
+
+        return maxChefScore;
+    }
+
+    collectRuleBucketRecipeMetrics(metrics, selectedMap, ruleBucketTopK) {
+        const bucketMap = new Map();
+        for (let i = 0; i < metrics.length; i++) {
+            const metric = metrics[i];
+            const bucketKeys = this.getRecipeRuleBucketKeys(metric.recipe);
+            for (let j = 0; j < bucketKeys.length; j++) {
+                const bucketKey = bucketKeys[j];
+                let bucket = bucketMap.get(bucketKey);
+                if (bucket == null) {
+                    bucket = [];
+                    bucketMap.set(bucketKey, bucket);
+                }
+                bucket.push(metric);
+            }
+        }
+
+        for (const bucket of bucketMap.values()) {
+            bucket.sort((a, b) => {
+                return b.totalScore - a.totalScore
+                    || b.unitScore - a.unitScore
+                    || b.count - a.count
+                    || b.scarceEfficiency - a.scarceEfficiency
+                    || a.recipe.recipeId - b.recipe.recipeId;
+            });
+
+            const take = Math.min(ruleBucketTopK, bucket.length);
+            for (let i = 0; i < take; i++) {
+                const metric = bucket[i];
+                const meta = this.getOrCreateRecipeCandidateMeta(selectedMap, metric);
+                this.markRecipeCandidateSource(meta, 'rule');
+                meta.ruleHits++;
+                meta.bestRuleRank = Math.min(meta.bestRuleRank, i + 1);
+            }
+        }
+    }
+
+    collectPerturbedRecipeMetrics(metrics, selectedMap, limit, runs, context) {
         const perturbWeights = [
             [0.82, 0.12, 0.06, 0.03],
             [0.72, 0.08, 0.20, 0.04],
@@ -561,48 +787,167 @@ class GodInference {
             ranked.sort((a, b) => {
                 const an = this.deterministicNoise(a.recipe.recipeId, run);
                 const bn = this.deterministicNoise(b.recipe.recipeId, run);
-                const as = wb * (a.totalScore / safeMaxTotal)
-                    + wu * (a.unitScore / safeMaxUnit)
-                    + wc * (a.count / safeMaxCount)
+                const as = wb * (a.totalScore / context.safeMaxTotal)
+                    + wu * (a.unitScore / context.safeMaxUnit)
+                    + wc * (a.count / context.safeMaxCount)
                     + wn * an;
-                const bs = wb * (b.totalScore / safeMaxTotal)
-                    + wu * (b.unitScore / safeMaxUnit)
-                    + wc * (b.count / safeMaxCount)
+                const bs = wb * (b.totalScore / context.safeMaxTotal)
+                    + wu * (b.unitScore / context.safeMaxUnit)
+                    + wc * (b.count / context.safeMaxCount)
                     + wn * bn;
                 if (as === bs) {
                     return b.totalScore - a.totalScore;
                 }
                 return bs - as;
             });
+            this.collectRankedRecipeMetrics(ranked, limit, selectedMap, 'perturb');
+        }
+    }
 
-            const take = Math.min(baseLimit, ranked.length);
-            for (let i = 0; i < take; i++) {
-                selectedMap.set(ranked[i].recipe.recipeId, ranked[i].recipe);
+    getRecipeRuleBucketKeys(recipe) {
+        const keys = [];
+        if (recipe.condiment != null && recipe.condiment !== '') {
+            keys.push(`flavor:${recipe.condiment}`);
+        }
+        if (recipe.bake > 0) {
+            keys.push('skill:Bake');
+        }
+        if (recipe.boil > 0) {
+            keys.push('skill:Boil');
+        }
+        if (recipe.stirfry > 0) {
+            keys.push('skill:Stirfry');
+        }
+        if (recipe.knife > 0) {
+            keys.push('skill:Knife');
+        }
+        if (recipe.fry > 0) {
+            keys.push('skill:Fry');
+        }
+        if (recipe.steam > 0) {
+            keys.push('skill:Steam');
+        }
+        keys.push(`rarity:${recipe.rarity}`);
+
+        const tags = recipe.tags == null ? [] : recipe.tags;
+        if (tags[0]) {
+            keys.push('ingredient:creation');
+        }
+        if (tags[1]) {
+            keys.push('ingredient:meat');
+        }
+        if (tags[2]) {
+            keys.push('ingredient:vegetable');
+        }
+        if (tags[3]) {
+            keys.push('ingredient:fish');
+        }
+        return keys;
+    }
+
+    getOrCreateRecipeCandidateMeta(selectedMap, metric) {
+        let meta = selectedMap.get(metric.recipe.recipeId);
+        if (meta != null) {
+            return meta;
+        }
+
+        meta = {
+            recipe: metric.recipe,
+            metric,
+            sortScore: 0,
+            sourceCount: 0,
+            hasGlobal: false,
+            hasChef: false,
+            hasRule: false,
+            hasScarce: false,
+            hasPerturb: false,
+            globalRank: Number.POSITIVE_INFINITY,
+            bestChefRank: Number.POSITIVE_INFINITY,
+            bestChefScore: 0,
+            chefHits: 0,
+            bestRuleRank: Number.POSITIVE_INFINITY,
+            ruleHits: 0,
+            scarceRank: Number.POSITIVE_INFINITY,
+            bestPerturbRank: Number.POSITIVE_INFINITY,
+            perturbHits: 0
+        };
+        selectedMap.set(metric.recipe.recipeId, meta);
+        return meta;
+    }
+
+    markRecipeCandidateSource(meta, sourceType) {
+        if (sourceType === 'global') {
+            if (!meta.hasGlobal) {
+                meta.hasGlobal = true;
+                meta.sourceCount++;
             }
+            return;
         }
-
-        let finalLimit = baseLimit;
-        if (selectedMap.size > baseLimit) {
-            let expandByRate = Math.ceil(baseLimit * this.recipeCandidateExpandRate);
-            finalLimit = Math.max(baseLimit, expandByRate);
-            finalLimit = Math.min(finalLimit, baseLimit + this.recipeCandidateExpandMax);
-            finalLimit = Math.min(finalLimit, selectedMap.size);
+        if (sourceType === 'chef') {
+            if (!meta.hasChef) {
+                meta.hasChef = true;
+                meta.sourceCount++;
+            }
+            return;
         }
-
-        const selectedRecipes = Array.from(selectedMap.values());
-        selectedRecipes.sort((r1, r2) => {
-            const m1 = metricByRecipeId.get(r1.recipeId);
-            const m2 = metricByRecipeId.get(r2.recipeId);
-            const s1 = m1 == null ? 0 : m1.totalScore;
-            const s2 = m2 == null ? 0 : m2.totalScore;
-            return s2 - s1;
-        });
-        if (selectedRecipes.length > finalLimit) {
-            selectedRecipes.length = finalLimit;
+        if (sourceType === 'rule') {
+            if (!meta.hasRule) {
+                meta.hasRule = true;
+                meta.sourceCount++;
+            }
+            return;
         }
+        if (sourceType === 'scarce') {
+            if (!meta.hasScarce) {
+                meta.hasScarce = true;
+                meta.sourceCount++;
+            }
+            return;
+        }
+        if (!meta.hasPerturb) {
+            meta.hasPerturb = true;
+            meta.sourceCount++;
+        }
+    }
 
-        console.info(`[候选菜谱扰动] 基础${baseLimit} 扩展到${selectedMap.size} 最终${selectedRecipes.length} run=${runs}`);
-        return selectedRecipes;
+    normalizeCandidateRank(rank, limit) {
+        if (!Number.isFinite(rank) || rank <= 0 || limit <= 0) {
+            return 0;
+        }
+        return (limit - rank + 1) / limit;
+    }
+
+    recipeCandidateCompositeScore(meta, normalization) {
+        const metric = meta.metric;
+        const totalNorm = metric.totalScore / normalization.safeMaxTotal;
+        const unitNorm = metric.unitScore / normalization.safeMaxUnit;
+        const countNorm = metric.count / normalization.safeMaxCount;
+        const chefNorm = meta.bestChefScore / normalization.safeMaxChefScore;
+        const scarceNorm = metric.scarceEfficiency / normalization.safeMaxScarceEfficiency;
+        const globalRankNorm = this.normalizeCandidateRank(meta.globalRank, normalization.globalLimit);
+        const chefRankNorm = this.normalizeCandidateRank(meta.bestChefRank, normalization.chefLimit);
+        const ruleRankNorm = this.normalizeCandidateRank(meta.bestRuleRank, normalization.ruleLimit);
+        const scarceRankNorm = this.normalizeCandidateRank(meta.scarceRank, normalization.scarceLimit);
+        const perturbRankNorm = this.normalizeCandidateRank(meta.bestPerturbRank, normalization.perturbLimit);
+        const chefCoverageNorm = normalization.chefCount <= 0
+            ? 0
+            : Math.min(1, meta.chefHits / Math.min(6, normalization.chefCount));
+        const ruleCoverageNorm = Math.min(1, meta.ruleHits / 4);
+        const sourceNorm = meta.sourceCount / 5;
+
+        return totalNorm * 0.34
+            + unitNorm * 0.08
+            + countNorm * 0.04
+            + globalRankNorm * 0.10
+            + chefNorm * 0.18
+            + chefRankNorm * 0.10
+            + chefCoverageNorm * 0.04
+            + ruleRankNorm * 0.14
+            + ruleCoverageNorm * 0.05
+            + scarceNorm * 0.10
+            + scarceRankNorm * 0.05
+            + perturbRankNorm * 0.03
+            + sourceNorm * 0.05;
     }
 
     deterministicNoise(recipeId, run) {
@@ -1445,26 +1790,28 @@ class OfficialGameData {
 
 class CalConfig {
     /**
-     * 计算配置，暂时只有加法额外追加的值
-     * */
+     * Calculation config
+     */
     constructor(deepLimit, recipeLimit, chefMinRarity, filterScoreRate, useEquip, useAll, mustChefs, ownChefTopK) {
-
-        this.deepLimit = deepLimit;   //生成菜谱时候的遍历深度
-        this.recipeLimit = recipeLimit;//菜谱限制，根据厨神规则排序菜谱，只是用前recipeLimit个菜
-        this.chefMinRarity = chefMinRarity;    //上场3个厨师的星级和
-        this.filterScoreRate = filterScoreRate;//使用厨具  带实现
-        this.useSimpleEquip = useEquip;//使用新手池的六种三星技法厨具
-        this.useEquip = useEquip;//使用厨具  待实现
-        this.useAll = useAll;//拥有全厨师全修炼，全菜谱全专精
-        this.mustChefs = ['二郎神'] //不收recipeLimit影响，参与计算的厨师
+        this.deepLimit = deepLimit;
+        this.recipeLimit = recipeLimit;
+        this.chefMinRarity = chefMinRarity;
+        this.filterScoreRate = filterScoreRate;
+        this.useSimpleEquip = useEquip;
+        this.useEquip = useEquip;
+        this.useAll = useAll;
+        this.mustChefs = mustChefs == null ? [String.fromCharCode(0x4e8c, 0x90ce, 0x795e)] : mustChefs;
         this.ownChefTopK = ownChefTopK == null ? 3 : Math.max(3, ownChefTopK | 0);
         this.baseOwnChefTopK = 3;
         this.enableDynamicTopK = true;
-        this.estimatedCandidateKeepRate = 1.12; // 允许保留部分估分高但基础分未达阈值的组合
-        this.maxEstimatedCandidateExtra = 800; // 控制额外候选上限，避免候选爆炸
-        this.recipePerturbRuns = 4; // 一阶段候选菜谱多次扰动探索次数
-        this.recipeCandidateExpandRate = 1.35; // 相比基础recipeLimit允许的扩容比例
-        this.recipeCandidateExpandMax = 60; // 扰动后最多增加的菜谱数量
+        this.estimatedCandidateKeepRate = 1.12;
+        this.maxEstimatedCandidateExtra = 800;
+        this.recipePerturbRuns = 4;
+        this.recipeCandidateExpandRate = 1.35;
+        this.recipeCandidateExpandMax = 60;
+        this.chefRecipeTopK = 120;
+        this.ruleBucketTopK = 30;
+        this.scarceRecipeTopK = 40;
     }
 
 }
