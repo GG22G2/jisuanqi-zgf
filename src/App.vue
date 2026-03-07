@@ -201,7 +201,7 @@ export default {
   },
   data() {
     // 获取URL参数
-    // http://localhost:5173/jisuanqi-zgf?useAll=true
+    // http://localhost:4173/jisuanqi-zgf?useAll=true
     const urlParams = new URLSearchParams(window.location.search)
     const useAll = urlParams.get('useAll') === 'true'
 

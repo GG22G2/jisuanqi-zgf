@@ -9,7 +9,8 @@ export default defineConfig(({ mode }) => {
     return {
         base: '/jisuanqi-zgf/',
         server: {
-            host: '0.0.0.0',
+            host: process.env.VITE_DEV_HOST || '127.0.0.1',
+            port: Number(process.env.VITE_DEV_PORT) || 4173,
         },
         plugins: [
             vue(),
