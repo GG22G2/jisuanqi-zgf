@@ -367,33 +367,7 @@ export default {
         return
       }
 
-      let topResult = null
-      try {
-        if (typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost')) {
-          const rawMyGameData = JSON.parse(localStorage.getItem('myGameData'))
-          if (rawMyGameData) {
-            const resp = await fetch('/api/full_calculate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                myGameData: rawMyGameData,
-                rule: ruleStr,
-                calConfig: this.calConfig,
-              }),
-            })
-            if (resp.ok) {
-              topResult = await resp.json()
-              console.info('[Rust Backend] RTX 3060 原生极速计算完成！', topResult)
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[Rust Backend] 本地服务不可用，回退前端计算:', err)
-      }
-
-      if (topResult == null) {
-        topResult = await Task.main(officialGameData, myGameData, ruleStr, this.calConfig)
-      }
+      const topResult = await Task.main(officialGameData, myGameData, ruleStr, this.calConfig)
       if (topResult == null) {
         this.errorNotify('无法计算', '规则不符合预期', 'error')
         this.deleteRule(this.currentRule)

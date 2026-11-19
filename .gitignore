@@ -28,7 +28,8 @@ temp
 .claude
 
 # Local Rust & test artifacts
-/rust-calculator/target/
+rust-calculator/
+一键启动.bat
 *.exe
 *.old.json
 bench.mjs
