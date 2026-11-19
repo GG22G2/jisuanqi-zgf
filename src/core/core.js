@@ -2226,16 +2226,19 @@ function createPartialSkillChef(officialGameData, chef, ownChefs) {
     }
 
     if (chef.ult) {
-        const ultimateId = chef.ultimateSkill;
-        skill = officialGameData.getSkill(ultimateId);
-        if (skill != null) {
-            effects = skill.effect;
-            for (let i = 0; i < effects.length; i++) {
-                let effect = effects[i];
-                if ("Partial" !== effect.condition) {
-                    continue
+        let ultSkills = chef.ultimateSkillList || (chef.ultimateSkill ? [chef.ultimateSkill] : []);
+        for (let k = 0; k < ultSkills.length; k++) {
+            const ultimateId = ultSkills[k];
+            skill = officialGameData.getSkill(ultimateId);
+            if (skill != null) {
+                effects = skill.effect;
+                for (let i = 0; i < effects.length; i++) {
+                    let effect = effects[i];
+                    if ("Partial" !== effect.condition) {
+                        continue;
+                    }
+                    partialEffects.push(effect);
                 }
-                partialEffects.push(effect);
             }
         }
     }
@@ -2294,15 +2297,18 @@ function buildChefSkillEffect(officialGameData, chef) {
 
     //如果没修炼，已经把修炼技能删除掉了
     if (chef.ult) {
-        const ultimateId = chef.ultimateSkill;
-        skill = officialGameData.getSkill(ultimateId);
-        if (ultimateId === 528) {//厨具效果翻倍
-            doubleEquip = true;
-        }
-        if (skill != null) {
-            effect = skill.effect;
-            for (let i = 0; i < effect.length; i++) {
-                skillEffect.effect(effect[i], skill, chef);
+        let ultSkills = chef.ultimateSkillList || (chef.ultimateSkill ? [chef.ultimateSkill] : []);
+        for (let k = 0; k < ultSkills.length; k++) {
+            const ultimateId = ultSkills[k];
+            skill = officialGameData.getSkill(ultimateId);
+            if (ultimateId === 528) {//厨具效果翻倍
+                doubleEquip = true;
+            }
+            if (skill != null) {
+                effect = skill.effect;
+                for (let i = 0; i < effect.length; i++) {
+                    skillEffect.effect(effect[i], skill, chef);
+                }
             }
         }
     }

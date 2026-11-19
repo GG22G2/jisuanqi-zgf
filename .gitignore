@@ -26,3 +26,15 @@ dist-ssr
 .playwright-cli
 temp
 .claude
+
+# Local Rust & test artifacts
+/rust-calculator/target/
+*.exe
+*.old.json
+bench.mjs
+new_gameData.json
+myGameData_*.json
+etc_rule.json
+rule.json
+sample_req.json
+gameData.json

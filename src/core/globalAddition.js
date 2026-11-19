@@ -26,13 +26,16 @@ export class GlobalAddition {
         for (let i = 0; i < chefs.length; i++) {
             let chef = chefs[i];
             if (this.hasXiuLian(chef)) {
-                const skill = skills.get(chef.ultimateSkill);
-                if (skill == null) {
-                    continue;
-                }
-                for (let j = 0; j < skill.effect.length; j++) {
-                    let effect = skill.effect[j];
-                    this.parseEffect(effect);
+                let ultSkills = chef.ultimateSkillList || (chef.ultimateSkill ? [chef.ultimateSkill] : []);
+                for (let k = 0; k < ultSkills.length; k++) {
+                    const skill = skills.get(ultSkills[k]);
+                    if (skill == null) {
+                        continue;
+                    }
+                    for (let j = 0; j < skill.effect.length; j++) {
+                        let effect = skill.effect[j];
+                        this.parseEffect(effect);
+                    }
                 }
             }
 

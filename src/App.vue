@@ -367,7 +367,33 @@ export default {
         return
       }
 
-      const topResult = await Task.main(officialGameData, myGameData, ruleStr, this.calConfig)
+      let topResult = null
+      try {
+        if (typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost')) {
+          const rawMyGameData = JSON.parse(localStorage.getItem('myGameData'))
+          if (rawMyGameData) {
+            const resp = await fetch('/api/full_calculate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                myGameData: rawMyGameData,
+                rule: ruleStr,
+                calConfig: this.calConfig,
+              }),
+            })
+            if (resp.ok) {
+              topResult = await resp.json()
+              console.info('[Rust Backend] RTX 3060 原生极速计算完成！', topResult)
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Rust Backend] 本地服务不可用，回退前端计算:', err)
+      }
+
+      if (topResult == null) {
+        topResult = await Task.main(officialGameData, myGameData, ruleStr, this.calConfig)
+      }
       if (topResult == null) {
         this.errorNotify('无法计算', '规则不符合预期', 'error')
         this.deleteRule(this.currentRule)
@@ -479,9 +505,21 @@ export default {
     async getOfficeGameData() {
       let gameData = localStorage.getItem('gameData')
 
-      if (gameData == null) {
+      if (gameData != null) {
+        try {
+          const parsed = JSON.parse(gameData)
+          // 如果本地缓存的旧数据中 chef 还在使用旧的 ultimateSkill 字段（或数据不全），自动升级为最新官方数据
+          if (!parsed.chefs || parsed.chefs.length < 800 || !parsed.chefs[0].ultimateSkillList) {
+            console.log('[GameData] 检测到本地缓存为旧版官方数据，自动更新至最新数据...')
+            gameData = await this.reloadGameData()
+          }
+        } catch (e) {
+          gameData = await this.reloadGameData()
+        }
+      } else {
         gameData = await this.reloadGameData()
       }
+
       if (gameData != null) {
         gameData = JSON.parse(gameData)
         return gameData
@@ -490,7 +528,7 @@ export default {
     },
     async reloadGameData() {
       const data = await (
-        await fetch(`https://foodgame.github.io/data/data.min.json?v=${new Date().getTime()}`)
+        await fetch(`https://h5.baochaojianghu.com/data/data.min.json?v=${new Date().getTime()}`)
       ).json()
       const dateStr = JSON.stringify(data)
       localStorage.setItem('gameData', dateStr)
